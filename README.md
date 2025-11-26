@@ -3,6 +3,8 @@
 > [!WARNING]
 > THIS IS WORK IN PROGRESS
 
+![visualization.png](docs/imgs/visualization.png)
+
 * **VoroLib** — a library with Voronoi-related utilities
 * **Voro** — a command-line executable using the library
 
@@ -74,14 +76,14 @@ lib/cmake/InmostVoro/ → CMake package config (exported targets)
 
 ---
 
-## **Usage**
+## **Example usage**
 
-Run the executable:
-
+1. Use a helper script to generate a cloud of random seed points in with coords between 0 and 1:
 ```bash
-./Voro input_file
+python scripts/generate_random_points.py 1000 random_points_1000.txt
 ```
-
----
-
-## **Project Structure**
+2. Run Voro to get a Voronoi tessellation with these points 
+```bash
+./Voro random_points_1000.txt
+```
+3. Open output file `voronoi_output.vtk` in ParaView to view the tessellation and use it
