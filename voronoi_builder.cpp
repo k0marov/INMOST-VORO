@@ -1,8 +1,64 @@
 #include "voronoi_builder.h"
-#include "planar_cutter.h"
-#include "helpers.h"
+#include "planar_cutter.h" // Now includes the new Polyhedron structs
 #include <cmath>
 #include <iostream>
+#include <map>
+#include <tuple>
+
+// Custom comparator for Point3D to use it in a map
+struct Point3DComparator {
+    bool operator()(const Point3D& a, const Point3D& b) const {
+        if (std::abs(a.x - b.x) > GEOMETRY_EPSILON) return a.x < b.x;
+        if (std::abs(a.y - b.y) > GEOMETRY_EPSILON) return a.y < b.y;
+        if (std::abs(a.z - b.z) > GEOMETRY_EPSILON) return a.z < b.z;
+        return false;
+    }
+};
+
+// Converts the final Polyhedron object into an INMOST Cell
+static Cell add_polyhedron_to_mesh(Mesh* m, const Polyhedron& poly, int seed_id) {
+    if (poly.faces.empty()) {
+        return InvalidCell();
+    }
+
+    std::map<Point3D, Node, Point3DComparator> node_map;
+    ElementArray<Face> cell_faces(m);
+
+    for (const auto& poly_face : poly.faces) {
+        if (poly_face.vertices.size() < 3) continue;
+
+        ElementArray<Node> face_nodes(m);
+        for (const auto& pt : poly_face.vertices) {
+            auto it = node_map.find(pt);
+            if (it != node_map.end()) {
+                face_nodes.push_back(it->second);
+            } else {
+                Storage::real coords[3] = {pt.x, pt.y, pt.z};
+                Node new_node = m->CreateNode(coords);
+                node_map[pt] = new_node;
+                face_nodes.push_back(new_node);
+            }
+        }
+        
+        Face new_face = m->CreateFace(face_nodes).first;
+        if (new_face.isValid()) {
+            cell_faces.push_back(new_face);
+        }
+    }
+
+    if (cell_faces.empty()) {
+        return InvalidCell();
+    }
+
+    Cell new_cell = m->CreateCell(cell_faces).first;
+    if (new_cell.isValid()) {
+        if(m->HaveTag("SEED_ID")) {
+            new_cell.Integer(m->GetTag("SEED_ID")) = seed_id;
+        }
+    }
+    return new_cell;
+}
+
 
 VoronoiBuilder::VoronoiBuilder(const std::vector<std::tuple<double, double, double>>& seeds, SystemSize system_size)
     : seeds(seeds), system_size(system_size) {
@@ -57,19 +113,20 @@ VoronoiBuilder::VoronoiBuilder(const std::vector<std::tuple<double, double, doub
 Mesh VoronoiBuilder::build() {
     Mesh global_mesh;
     global_mesh.SetDimensions(3);
+    global_mesh.CreateTag("SEED_ID", DATA_INTEGER, CELL, NONE, 1);
 
     double min_x_sys = std::get<0>(system_size).first;
+    double max_x_sys = std::get<0>(system_size).second;
     double min_y_sys = std::get<1>(system_size).first;
+    double max_y_sys = std::get<1>(system_size).second;
     double min_z_sys = std::get<2>(system_size).first;
-
-    PlanarCutter cutter;
+    double max_z_sys = std::get<2>(system_size).second;
 
     for (size_t seed_index = 0; seed_index < seeds.size(); ++seed_index) {
-        double x = std::get<0>(seeds[seed_index]);
-        double y = std::get<1>(seeds[seed_index]);
-        double z = std::get<2>(seeds[seed_index]);
-
-        std::cout << "seed: " << x << ' ' << y << ' ' << z <<'\n';
+        const auto& current_seed = seeds[seed_index];
+        double x = std::get<0>(current_seed);
+        double y = std::get<1>(current_seed);
+        double z = std::get<2>(current_seed);
 
         int ix = static_cast<int>((x - min_x_sys) / container_size_x);
         int iy = static_cast<int>((y - min_y_sys) / container_size_y);
@@ -77,74 +134,57 @@ Mesh VoronoiBuilder::build() {
 
         if (ix < 0 || ix >= nx || iy < 0 || iy >= ny || iz < 0 || iz >= nz) continue;
 
-//        double center_x = min_x_sys + (ix + 0.5) * container_size_x;
-//        double center_y = min_y_sys + (iy + 0.5) * container_size_y;
-//        double center_z = min_z_sys + (iz + 0.5) * container_size_z;
+        // 1. Create initial lightweight Polyhedron
+        Polyhedron current_poly = create_cube(min_x_sys, max_x_sys, min_y_sys, max_y_sys, min_z_sys, max_z_sys);
 
-        Cell current_voronoi_cell = CreateCubeAtPoint(&global_mesh, x, y, z, 2*container_size_x, 2*container_size_y, 2*container_size_z);
-        bool cell_was_destroyed = false;
-
-        // TODO: it's  a lot better to just construct the initial cell such that it does not overflow bounds
-        current_voronoi_cell = cutter.Cut(current_voronoi_cell, 1, 0, 0, 1, true);
-        current_voronoi_cell = cutter.Cut(current_voronoi_cell, -1, 0, 0, 0, true);
-
-        current_voronoi_cell = cutter.Cut(current_voronoi_cell, 0, 1, 0, 1, true);
-        current_voronoi_cell = cutter.Cut(current_voronoi_cell, 0, -1, 0, 0, true);
-
-        current_voronoi_cell = cutter.Cut(current_voronoi_cell, 0, 0, 1, 1, true);
-        current_voronoi_cell = cutter.Cut(current_voronoi_cell, 0, 0, -1, 0, true);
-
-        // Optimization: Collect all neighbors, sort by distance, then cut.
+        // 2. Collect and sort neighbors
         std::vector<std::pair<double, int>> neighbors;
         for (int i = -1; i <= 1; ++i) {
             for (int j = -1; j <= 1; ++j) {
                 for (int k = -1; k <= 1; ++k) {
-                    int nix = ix + i;
-                    int niy = iy + j;
-                    int niz = iz + k;
-
+                    int nix = ix + i, niy = iy + j, niz = iz + k;
                     if (nix >= 0 && nix < nx && niy >= 0 && niy < ny && niz >= 0 && niz < nz) {
                         for (int neighbor_seed_index : containers[nix][niy][niz]) {
                             if (neighbor_seed_index == seed_index) continue;
-
-                            double nx_coord = std::get<0>(seeds[neighbor_seed_index]);
-                            double ny_coord = std::get<1>(seeds[neighbor_seed_index]);
-                            double nz_coord = std::get<2>(seeds[neighbor_seed_index]);
-                            double dist_sq = (nx_coord - x) * (nx_coord - x) +
-                                             (ny_coord - y) * (ny_coord - y) +
-                                             (nz_coord - z) * (nz_coord - z);
+                            const auto& s = seeds[neighbor_seed_index];
+                            double dist_sq = (std::get<0>(s) - x) * (std::get<0>(s) - x) +
+                                             (std::get<1>(s) - y) * (std::get<1>(s) - y) +
+                                             (std::get<2>(s) - z) * (std::get<2>(s) - z);
                             neighbors.push_back({dist_sq, neighbor_seed_index});
                         }
                     }
                 }
             }
         }
-
-        // Sort neighbors by distance (ascending)
         std::sort(neighbors.begin(), neighbors.end());
 
-        // Cut the cell with the sorted neighbors
+        // 3. Cut the lightweight Polyhedron
         for (const auto& neighbor_pair : neighbors) {
             int neighbor_seed_index = neighbor_pair.second;
+            const auto& s = seeds[neighbor_seed_index];
+            double nx_coord = std::get<0>(s);
+            double ny_coord = std::get<1>(s);
+            double nz_coord = std::get<2>(s);
 
-            double nx_coord = std::get<0>(seeds[neighbor_seed_index]);
-            double ny_coord = std::get<1>(seeds[neighbor_seed_index]);
-            double nz_coord = std::get<2>(seeds[neighbor_seed_index]);
+            Plane plane;
+            plane.n = {2 * (nx_coord - x), 2 * (ny_coord - y), 2 * (nz_coord - z)};
+            plane.d = (nx_coord * nx_coord - x * x) +
+                      (ny_coord * ny_coord - y * y) +
+                      (nz_coord * nz_coord - z * z);
+            
+            bool cut_positive = dot(plane.n, {x, y, z}) - plane.d < 0;
 
-            double a = 2 * (nx_coord - x);
-            double b = 2 * (ny_coord - y);
-            double c = 2 * (nz_coord - z);
-            double d = (nx_coord * nx_coord - x * x) +
-                       (ny_coord * ny_coord - y * y) +
-                       (nz_coord * nz_coord - z * z);
-            bool cut_positive = a * x + b * y + c * z - d < 0;
-            current_voronoi_cell = cutter.Cut(current_voronoi_cell, a, b, c, d, cut_positive);
+            current_poly = clip_polyhedron(current_poly, plane, cut_positive);
 
-            if (!current_voronoi_cell.isValid()) {
-                std::cerr << "Warning: Voronoi cell for seed " << seed_index << " was entirely cut away." << std::endl;
-                cell_was_destroyed = true;
-                break;
+            if (current_poly.faces.empty()) {
+                 std::cerr << "Warning: Voronoi cell for seed " << seed_index << " was entirely cut away." << std::endl;
+                 break;
             }
+        }
+        
+        // 4. If the final polyhedron is valid, add it to the INMOST mesh
+        if (!current_poly.faces.empty()) {
+            add_polyhedron_to_mesh(&global_mesh, current_poly, seed_index);
         }
     }
 

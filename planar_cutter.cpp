@@ -1,133 +1,122 @@
 #include "planar_cutter.h"
-#include <map>
-#include <vector>
-#include <set>
-#include <algorithm>
 #include <iostream>
 
-PlanarCutter::PlanarCutter() {}
+// --- Vector Math Helpers ---
 
-Cell PlanarCutter::Cut(Cell& cell_to_cut, double a, double b, double c, double d, bool cut_positive) {
-    if (!cell_to_cut.isValid()) return cell_to_cut;
+static Point3D subtract(const Point3D& a, const Point3D& b) {
+    return {a.x - b.x, a.y - b.y, a.z - b.z};
+}
 
-    Mesh* m = cell_to_cut.GetMeshLink();
-    const double epsilon = 1.0e-9;
+static Point3D add(const Point3D& a, const Point3D& b) {
+    return {a.x + b.x, a.y + b.y, a.z + b.z};
+}
 
-    auto level_func = [&](const Storage::real p[3]) {
-        return a * p[0] + b * p[1] + c * p[2] - d;
+static Point3D scale(const Point3D& a, double s) {
+    return {a.x * s, a.y * s, a.z * s};
+}
+
+static Point3D cross(const Point3D& a, const Point3D& b) {
+    return {
+        a.y * b.z - a.z * b.y,
+        a.z * b.x - a.x * b.z,
+        a.x * b.y - a.y * b.x
     };
+}
 
-    ElementArray<Face> original_faces = cell_to_cut.getFaces();
-    ElementArray<Edge> original_edges = cell_to_cut.getEdges();
-    
-    std::map<HandleType, Node> edge_to_new_node;
-    std::set<HandleType> on_plane_nodes;
+// --- Clipping Algorithm ---
 
-    for (size_t i = 0; i < original_edges.size(); ++i) {
-        Edge edge = original_edges[i];
-        if (!edge.isValid()) continue;
-        Node n0 = edge.getBeg(), n1 = edge.getEnd();
-        double val0 = level_func(n0.Coords().data()), val1 = level_func(n1.Coords().data());
-        if (std::fabs(val0) < epsilon) on_plane_nodes.insert(n0.GetHandle());
-        if (std::fabs(val1) < epsilon) on_plane_nodes.insert(n1.GetHandle());
-        if (val0 * val1 < -epsilon * epsilon) {
-            double t = val0 / (val0 - val1);
-            Storage::real p[3];
-            const Storage::real* c0 = n0.Coords().data();
-            const Storage::real* c1 = n1.Coords().data();
-            p[0] = c0[0] + t * (c1[0] - c0[0]);
-            p[1] = c0[1] + t * (c1[1] - c0[1]);
-            p[2] = c0[2] + t * (c1[2] - c0[2]);
-            Node new_node = m->CreateNode(p);
-            edge_to_new_node[edge.GetHandle()] = new_node;
-            Edge::SplitEdge(edge, ElementArray<Node>(m, 1, new_node.GetHandle()), 0);
+/**
+ * @brief Calculates the signed distance of a point from a plane.
+ */
+static double classify_vertex(const Point3D& v, const Plane& plane) {
+    return dot(plane.n, v) - plane.d;
+}
+
+/**
+ * @brief Calculates the intersection point of a line segment with a plane.
+ */
+static Point3D intersect_edge(const Point3D& p1, const Point3D& p2, double d1, double d2) {
+    Point3D line_dir = subtract(p2, p1);
+    double t = d1 / (d1 - d2);
+    return {p1.x + t * line_dir.x, p1.y + t * line_dir.y, p1.z + t * line_dir.z};
+}
+
+
+Polyhedron clip_polyhedron(const Polyhedron& subject, const Plane& plane, bool keep_positive_side) {
+    Polyhedron result;
+    std::vector<Point3D> cap_face_vertices;
+
+    for (const auto& face : subject.faces) {
+        if (face.vertices.empty()) continue;
+
+        Polygon clipped_face;
+        Point3D S = face.vertices.back();
+        double dist_S = classify_vertex(S, plane);
+
+        for (const Point3D& E : face.vertices) {
+            double dist_E = classify_vertex(E, plane);
+
+            bool s_is_kept, e_is_kept;
+            if (keep_positive_side) {
+                s_is_kept = dist_S > -GEOMETRY_EPSILON;
+                e_is_kept = dist_E > -GEOMETRY_EPSILON;
+            } else {
+                s_is_kept = dist_S < GEOMETRY_EPSILON;
+                e_is_kept = dist_E < GEOMETRY_EPSILON;
+            }
+
+            if (s_is_kept != e_is_kept) {
+                Point3D I = intersect_edge(S, E, dist_S, dist_E);
+                clipped_face.vertices.push_back(I);
+                cap_face_vertices.push_back(I);
+            }
+
+            if (e_is_kept) {
+                clipped_face.vertices.push_back(E);
+            }
+
+            S = E;
+            dist_S = dist_E;
+        }
+
+        if (clipped_face.vertices.size() >= 3) {
+            result.faces.push_back(clipped_face);
         }
     }
 
-    ElementArray<Edge> cutting_edges(m);
-    for (size_t i = 0; i < original_faces.size(); ++i) {
-        Face face = original_faces[i];
-        if (!face.isValid()) continue;
-        std::vector<HandleType> nodes_on_plane;
-        ElementArray<Edge> face_edges = face.getEdges();
-        for(size_t j = 0; j < face_edges.size(); ++j) {
-            if (edge_to_new_node.count(face_edges[j].GetHandle())) {
-                nodes_on_plane.push_back(edge_to_new_node[face_edges[j].GetHandle()].GetHandle());
-            }
+    if (cap_face_vertices.size() >= 3) {
+        Point3D centroid = {0, 0, 0};
+        for (const auto& v : cap_face_vertices) {
+            centroid = add(centroid, v);
         }
-        ElementArray<Node> face_nodes = face.getNodes();
-        for(size_t j = 0; j < face_nodes.size(); ++j) {
-            if (on_plane_nodes.count(face_nodes[j].GetHandle())) {
-                nodes_on_plane.push_back(face_nodes[j].GetHandle());
-            }
-        }
-        if (nodes_on_plane.size() == 2) {
-            Edge new_edge = m->CreateEdge(ElementArray<Node>(m, nodes_on_plane.begin(), nodes_on_plane.end())).first;
-            if (new_edge.isValid()) {
-                cutting_edges.push_back(new_edge);
-                Face::SplitFace(face, ElementArray<Edge>(m, 1, new_edge.GetHandle()), 0);
-            }
-        }
-    }
-
-    if (cutting_edges.size() < 3) return cell_to_cut;
-
-    // 3. Order the cutting_edges to form a loop
-    ElementArray<Edge> ordered_edges(m);
-    if (!cutting_edges.empty()) {
-        std::map<HandleType, std::vector<HandleType>> adj;
-        for(size_t i = 0; i < cutting_edges.size(); ++i) {
-            adj[cutting_edges[i].getBeg().GetHandle()].push_back(cutting_edges[i].GetHandle());
-            adj[cutting_edges[i].getEnd().GetHandle()].push_back(cutting_edges[i].GetHandle());
-        }
-
-        std::set<HandleType> visited_edges;
-        HandleType first_edge = cutting_edges[0].GetHandle();
-        HandleType current_edge = first_edge;
-        HandleType current_node = cutting_edges[0].getEnd().GetHandle();
+        centroid.x /= cap_face_vertices.size();
+        centroid.y /= cap_face_vertices.size();
+        centroid.z /= cap_face_vertices.size();
         
-        ordered_edges.push_back(Edge(m, current_edge));
-        visited_edges.insert(current_edge);
+        Point3D sort_axis = keep_positive_side ? scale(plane.n, -1.0) : plane.n;
 
-        while(ordered_edges.size() < cutting_edges.size()) {
-            bool found = false;
-            for(HandleType edge_handle : adj[current_node]) {
-                if(visited_edges.find(edge_handle) == visited_edges.end()) {
-                    Edge e(m, edge_handle);
-                    ordered_edges.push_back(e);
-                    visited_edges.insert(edge_handle);
-                    current_node = (e.getBeg().GetHandle() == current_node) ? e.getEnd().GetHandle() : e.getBeg().GetHandle();
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) break; // Should not happen in a simple loop
-        }
+        std::sort(cap_face_vertices.begin(), cap_face_vertices.end(),
+                  [&](const Point3D& a, const Point3D& b) {
+                    Point3D vec_a = subtract(a, centroid);
+                    Point3D vec_b = subtract(b, centroid);
+                    double sign = dot(sort_axis, cross(vec_a, vec_b));
+                    return sign > 0;
+                  });
+        
+        result.faces.push_back({cap_face_vertices});
     }
-    
-    if (ordered_edges.size() < 3) return cell_to_cut;
 
-    Face cutting_face = m->CreateFace(ordered_edges).first;
-    if (!cutting_face.isValid()) return cell_to_cut;
+    return result;
+}
 
-    ElementArray<Cell> new_cells = Cell::SplitCell(cell_to_cut, ElementArray<Face>(m, 1, cutting_face.GetHandle()), 0);
-
-    if (new_cells.empty()) return InvalidCell();
-    if (new_cells.size() == 1) return new_cells[0];
-
-    Cell kept_cell = InvalidCell();
-    for (size_t i = 0; i < new_cells.size(); ++i) {
-        Storage::real centroid[3];
-        new_cells[i].Centroid(centroid);
-        double val = level_func(centroid);
-        bool should_be_kept = cut_positive ? (val <= epsilon) : (val >= -epsilon);
-        if (should_be_kept && !kept_cell.isValid()) {
-            kept_cell = new_cells[i];
-        } else {
-            new_cells[i].Delete();
-        }
-    }
-    
-//    m->RemoveOrphaned(); this method does not exist
-    return kept_cell;
+Polyhedron create_cube(double min_x, double max_x, double min_y, double max_y, double min_z, double max_z) {
+    Polyhedron cube;
+    // Note: Winding order matters for face normals. Assuming outward-facing normals.
+    cube.faces.push_back({{{min_x, min_y, min_z}, {max_x, min_y, min_z}, {max_x, max_y, min_z}, {min_x, max_y, min_z}}}); // Bottom (-z)
+    cube.faces.push_back({{{min_x, min_y, max_z}, {min_x, max_y, max_z}, {max_x, max_y, max_z}, {max_x, min_y, max_z}}}); // Top (+z)
+    cube.faces.push_back({{{min_x, min_y, min_z}, {min_x, min_y, max_z}, {max_x, min_y, max_z}, {max_x, min_y, min_z}}}); // Front (-y)
+    cube.faces.push_back({{{min_x, max_y, min_z}, {max_x, max_y, min_z}, {max_x, max_y, max_z}, {min_x, max_y, max_z}}}); // Back (+y)
+    cube.faces.push_back({{{min_x, min_y, min_z}, {min_x, max_y, min_z}, {min_x, max_y, max_z}, {min_x, min_y, max_z}}}); // Left (-x)
+    cube.faces.push_back({{{max_x, min_y, min_z}, {max_x, min_y, max_z}, {max_x, max_y, max_z}, {max_x, max_y, min_z}}}); // Right (+x)
+    return cube;
 }
