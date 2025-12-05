@@ -37,6 +37,8 @@ Polyhedron create_cube(double min_x, double max_x, double min_y, double max_y, d
 
 Polyhedron clip_polyhedron(const Polyhedron& subject, const Plane& plane, bool keep_positive_side = false);
 
+void print_polyhedron(const Polyhedron& poly);
+
 // --- Inline Helpers ---
 
 inline double dot(const Point3D& a, const Point3D& b) {

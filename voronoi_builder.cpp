@@ -52,9 +52,10 @@ static Cell add_polyhedron_to_mesh(Mesh* m, const Polyhedron& poly, int seed_id)
 
     Cell new_cell = m->CreateCell(cell_faces).first;
     if (new_cell.isValid()) {
-        if(m->HaveTag("SEED_ID")) {
-            new_cell.Integer(m->GetTag("SEED_ID")) = seed_id;
-        }
+      std::cout << "Created a valid cell for seed " << seed_id << '\n';
+//        if(m->HaveTag("SEED_ID")) {
+//            new_cell.Integer(m->GetTag("SEED_ID")) = seed_id;
+//        }
     }
     return new_cell;
 }
@@ -172,18 +173,22 @@ Mesh VoronoiBuilder::build() {
                       (ny_coord * ny_coord - y * y) +
                       (nz_coord * nz_coord - z * z);
             
-            bool cut_positive = dot(plane.n, {x, y, z}) - plane.d < 0;
+            // The seed point is always on the negative side of the plane as defined.
+            // Therefore, we must always keep the "negative" side of the polyhedron.
+            const bool keep_positive_side = false;
 
-            current_poly = clip_polyhedron(current_poly, plane, cut_positive);
+            current_poly = clip_polyhedron(current_poly, plane, keep_positive_side);
 
             if (current_poly.faces.empty()) {
                  std::cerr << "Warning: Voronoi cell for seed " << seed_index << " was entirely cut away." << std::endl;
                  break;
             }
         }
-        
+
         // 4. If the final polyhedron is valid, add it to the INMOST mesh
         if (!current_poly.faces.empty()) {
+            std::cout << "--- Polyhedron for seed " << seed_index << " before converting to INMOST ---" << std::endl;
+            print_polyhedron(current_poly);
             add_polyhedron_to_mesh(&global_mesh, current_poly, seed_index);
         }
     }

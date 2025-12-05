@@ -1,6 +1,17 @@
 #include "planar_cutter.h"
 #include <iostream>
 
+void print_polyhedron(const Polyhedron& poly) {
+  std::cout << "Polyhedron has " << poly.faces.size() << " faces:" << std::endl;
+  int face_num = 0;
+  for (const auto& face : poly.faces) {
+    std::cout << "  Face " << face_num++ << " has " << face.vertices.size() << " vertices:" << std::endl;
+    for (const auto& v : face.vertices) {
+      std::cout << "    (" << v.x << ", " << v.y << ", " << v.z << ")" << std::endl;
+    }
+  }
+}
+
 // --- Vector Math Helpers ---
 
 static Point3D subtract(const Point3D& a, const Point3D& b) {
@@ -85,25 +96,41 @@ Polyhedron clip_polyhedron(const Polyhedron& subject, const Plane& plane, bool k
     }
 
     if (cap_face_vertices.size() >= 3) {
-        Point3D centroid = {0, 0, 0};
-        for (const auto& v : cap_face_vertices) {
-            centroid = add(centroid, v);
-        }
-        centroid.x /= cap_face_vertices.size();
-        centroid.y /= cap_face_vertices.size();
-        centroid.z /= cap_face_vertices.size();
-        
-        Point3D sort_axis = keep_positive_side ? scale(plane.n, -1.0) : plane.n;
+        // First, remove duplicate vertices that may have been added from shared edges
+        auto comparator = [](const Point3D& a, const Point3D& b) {
+            if (std::abs(a.x - b.x) > GEOMETRY_EPSILON) return a.x < b.x;
+            if (std::abs(a.y - b.y) > GEOMETRY_EPSILON) return a.y < b.y;
+            return a.z < b.z;
+        };
+        std::sort(cap_face_vertices.begin(), cap_face_vertices.end(), comparator);
+        cap_face_vertices.erase(std::unique(cap_face_vertices.begin(), cap_face_vertices.end(),
+            [](const Point3D& a, const Point3D& b) {
+                return std::abs(a.x - b.x) < GEOMETRY_EPSILON &&
+                       std::abs(a.y - b.y) < GEOMETRY_EPSILON &&
+                       std::abs(a.z - b.z) < GEOMETRY_EPSILON;
+            }), cap_face_vertices.end());
 
-        std::sort(cap_face_vertices.begin(), cap_face_vertices.end(),
-                  [&](const Point3D& a, const Point3D& b) {
-                    Point3D vec_a = subtract(a, centroid);
-                    Point3D vec_b = subtract(b, centroid);
-                    double sign = dot(sort_axis, cross(vec_a, vec_b));
-                    return sign > 0;
-                  });
-        
-        result.faces.push_back({cap_face_vertices});
+        if (cap_face_vertices.size() >= 3) {
+            Point3D centroid = {0, 0, 0};
+            for (const auto& v : cap_face_vertices) {
+                centroid = add(centroid, v);
+            }
+            centroid.x /= cap_face_vertices.size();
+            centroid.y /= cap_face_vertices.size();
+            centroid.z /= cap_face_vertices.size();
+            
+            Point3D sort_axis = keep_positive_side ? scale(plane.n, -1.0) : plane.n;
+
+            std::sort(cap_face_vertices.begin(), cap_face_vertices.end(),
+                      [&](const Point3D& a, const Point3D& b) {
+                        Point3D vec_a = subtract(a, centroid);
+                        Point3D vec_b = subtract(b, centroid);
+                        double sign = dot(sort_axis, cross(vec_a, vec_b));
+                        return sign > 0;
+                      });
+            
+            result.faces.push_back({cap_face_vertices});
+        }
     }
 
     return result;

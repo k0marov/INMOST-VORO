@@ -1,65 +1,226 @@
-#include "inmost.h"
-#include "voronoi_builder.h"
-#include "helpers.h"
+// voronoi_clip_to_inmost.cpp
+// Minimal convex polyhedron clipping + shared vertices + INMOST Cell creation
+
+#include <algorithm>
+#include <cmath>
 #include <iostream>
+#include <utility>
 #include <vector>
-#include <fstream>
-#include <sstream>
-#include <tuple>
 
-using std::get;
-
+#include "inmost.h" // Make sure INMOST include path is set
 using namespace INMOST;
 
-int main(int argc, char ** argv)
-{
-    if (argc < 2) {
-        std::cout << "Usage: " << argv[0] << " <path_to_xyz_file>" << std::endl;
-        return 1;
+const double EPS = 1e-9;
+
+// ===================== Vector and Plane =====================
+struct Vec3 {
+  double x, y, z;
+  Vec3() : x(0), y(0), z(0) {}
+  Vec3(double X, double Y, double Z) : x(X), y(Y), z(Z) {}
+  Vec3 operator+(const Vec3 &b) const { return Vec3(x+b.x, y+b.y, z+b.z); }
+  Vec3 operator-(const Vec3 &b) const { return Vec3(x-b.x, y-b.y, z-b.z); }
+  Vec3 operator*(double s) const { return Vec3(x*s, y*s, z*s); }
+};
+
+static Vec3 cross(const Vec3 &a, const Vec3 &b) {
+  return Vec3(a.y*b.z - a.z*b.y, a.z*b.x - a.x*b.z, a.x*b.y - a.y*b.x);
+}
+static double dot(const Vec3 &a,const Vec3 &b){ return a.x*b.x + a.y*b.y + a.z*b.z; }
+static double norm(const Vec3 &a){ return sqrt(dot(a,a)); }
+static Vec3 normalize(const Vec3 &a){ double n=norm(a); return n<1e-15 ? a : a*(1.0/n); }
+
+struct Plane {
+  Vec3 n; // normal
+  double d;
+  Plane() : n(), d(0) {}
+  Plane(const Vec3 &N, double D) : n(N), d(D) {}
+  double distance(const Vec3 &p) const { return dot(n,p)+d; }
+};
+
+// ===================== Polyhedron Representation =====================
+using FaceRaw = std::vector<Vec3>;
+using PolyhedronRaw = std::vector<FaceRaw>; // each face: list of points
+
+struct Polyhedron {
+  std::vector<Vec3> vertices;
+  std::vector<std::vector<int>> faces; // faces use vertex indices
+};
+
+// ===================== Helper functions =====================
+Vec3 intersect_segment_plane(const Vec3 &p, const Vec3 &q, const Plane &pl) {
+  double dp = pl.distance(p);
+  double dq = pl.distance(q);
+  double t = dp - dq;
+  if (fabs(t)<1e-15) return p;
+  double alpha = dp / (dp - dq);
+  if (alpha < 0) alpha = 0;
+  if (alpha > 1) alpha = 1;
+  return p + (q - p) * alpha;
+}
+
+FaceRaw clip_polygon_by_plane(const FaceRaw &poly, const Plane &pl, std::vector<Vec3> &intersections) {
+  FaceRaw out;
+  if (poly.empty()) return out;
+  int m = (int)poly.size();
+  for (int i=0;i<m;i++){
+    Vec3 A=poly[i]; Vec3 B=poly[(i+1)%m];
+    double da=pl.distance(A); double db=pl.distance(B);
+    bool ina=(da<=EPS), inb=(db<=EPS);
+    if (ina && inb) { out.push_back(B); }
+    else if (ina && !inb) { Vec3 I=intersect_segment_plane(A,B,pl); out.push_back(I); intersections.push_back(I); }
+    else if (!ina && inb) { Vec3 I=intersect_segment_plane(A,B,pl); out.push_back(I); out.push_back(B); intersections.push_back(I); }
+  }
+  // remove near-duplicate consecutive vertices
+  FaceRaw cleaned;
+  for (auto &v : out) {
+    if (cleaned.empty()) cleaned.push_back(v);
+    else if (norm(v-cleaned.back())>1e-12) cleaned.push_back(v);
+  }
+  if (cleaned.size()>=2 && norm(cleaned.front()-cleaned.back())<1e-12) cleaned.pop_back();
+  return cleaned;
+}
+
+std::vector<Vec3> unique_points(const std::vector<Vec3> &pts, double tol=1e-9) {
+  std::vector<Vec3> res;
+  for (auto &p : pts) {
+    bool found=false;
+    for (auto &q : res) if (norm(p-q)<=tol){found=true; break;}
+    if (!found) res.push_back(p);
+  }
+  return res;
+}
+
+FaceRaw sort_points_on_plane(const std::vector<Vec3> &pts, const Plane &pl) {
+  FaceRaw ordered;
+  if (pts.size()<3) return ordered;
+  Vec3 centroid(0,0,0);
+  for (auto &p: pts) centroid = centroid + p;
+  centroid = centroid * (1.0/pts.size());
+  Vec3 n = normalize(pl.n);
+  Vec3 arbitrary = fabs(n.x)<0.9 ? Vec3(1,0,0) : Vec3(0,1,0);
+  Vec3 u = normalize(cross(n, arbitrary));
+  Vec3 v = cross(n,u);
+  std::vector<std::pair<double, Vec3>> ang_pts;
+  for (auto &p : pts) {
+    Vec3 rel = p - centroid;
+    double angle = atan2(dot(rel,v), dot(rel,u));
+    ang_pts.emplace_back(angle,p);
+  }
+  std::sort(ang_pts.begin(), ang_pts.end(), [](auto &a, auto &b){return a.first<b.first;});
+  for (auto &ap : ang_pts) ordered.push_back(ap.second);
+  return ordered;
+}
+
+// ===================== Polyhedron clipping =====================
+PolyhedronRaw clip_polyhedron(const PolyhedronRaw &poly, const Plane &pl) {
+  PolyhedronRaw newpoly;
+  std::vector<Vec3> all_intersections;
+  for (auto &face : poly) {
+    FaceRaw clipped = clip_polygon_by_plane(face, pl, all_intersections);
+    if (clipped.size()>=3) newpoly.push_back(clipped);
+  }
+  std::vector<Vec3> uniq = unique_points(all_intersections,1e-9);
+  if (uniq.size()>=3) {
+    FaceRaw cap = sort_points_on_plane(uniq,pl);
+    if (cap.size()>=3) {
+      Vec3 e1=cap[1]-cap[0], e2=cap[2]-cap[0];
+      Vec3 capn=normalize(cross(e1,e2));
+      if (dot(capn,pl.n)>0) std::reverse(cap.begin(),cap.end());
+      newpoly.push_back(cap);
     }
+  }
+  return newpoly;
+}
 
-    std::string filepath = argv[1];
-    std::vector<std::tuple<double, double, double>> seeds;
-    
-    std::ifstream infile(filepath);
-    if (!infile.is_open()) {
-        std::cerr << "Error: Could not open file " << filepath << std::endl;
-        return 1;
-    }
+// ===================== Convert to shared-vertex Polyhedron =====================
+Polyhedron unify_vertices(const PolyhedronRaw &raw, double tol=1e-12) {
+  Polyhedron out;
+  auto find_or_add = [&](const Vec3 &v){
+    for (int i=0;i<(int)out.vertices.size();++i)
+      if (norm(out.vertices[i]-v)<tol) return i;
+    out.vertices.push_back(v);
+    return (int)out.vertices.size()-1;
+  };
+  for (auto &face_raw : raw) {
+    std::vector<int> f;
+    f.reserve(face_raw.size());
+    for (auto &v: face_raw) f.push_back(find_or_add(v));
+    out.faces.push_back(std::move(f));
+  }
+  return out;
+}
 
-    std::string line;
-    double x, y, z;
-    while (std::getline(infile, line)) {
-        std::stringstream ss(line);
-        if (ss >> x >> y >> z) {
-            seeds.emplace_back(x, y, z);
-        }
-    }
-    
-    std::cout << "Read " << seeds.size() << " seeds from " << filepath << std::endl;
+// ===================== INMOST conversion =====================
+Cell add_polyhedron_to_inmost(Mesh *mesh, const Polyhedron &poly) {
+  mesh->BeginModification();  // Begin modification epoch
 
-    // Define a 1x1x1 system size
-    SystemSize system_size = {
-        std::make_pair(0.0, 1.0),
-        std::make_pair(0.0, 1.0),
-        std::make_pair(0.0, 1.0)
-    };
+  // 1. Create nodes using ElementArray and const real* coordinates
+  ElementArray<Node> nodes(mesh);
+  nodes.reserve(poly.vertices.size());
+  for (const auto &v : poly.vertices) {
+    const Storage::real coords[3] = {v.x, v.y, v.z};
+    auto n = mesh->CreateNode(coords);  // assuming pair return
+    nodes.push_back(n);
+    // optionally: check 'created'
+  }
 
-    // Build the Voronoi tessellation
-    VoronoiBuilder builder(seeds, system_size);
-    Mesh voronoi_mesh = builder.build();
+  // 2. Create faces using ElementArray
+  ElementArray<Face> faces(mesh);
+  faces.reserve(poly.faces.size());
+  for (const auto &fidx : poly.faces) {
+    ElementArray<Node> fnodes(mesh);
+    fnodes.reserve(fidx.size());
+    for (int vid : fidx) fnodes.push_back(nodes[vid]);
+    auto [f, created] = mesh->CreateFace(fnodes);  // assuming pair return
+    faces.push_back(f);
+  }
 
-//    for (auto s : seeds) {
-//      std::cout << "created cube for seed " << get<0>(s) << ' ' << get<1>(s) << ' ' << get<2>(s) << '\n';
-//      CreateCubeAtPoint(&voronoi_mesh, get<0>(s), get<1>(s), get<2>(s), 0.1, 0.1, 0.1);
-////      voronoi_mesh.CreateNode({get<0>(s), get<1>(s), get<2>(s)})
-//    }
+  // 3. Create cell from faces
+  auto [c, created] = mesh->CreateCell(faces);  // assuming pair return
 
+  mesh->EndModification();  // Finish modification epoch
 
-    // Save the result to a VTK file
-    std::string output_filename = "voronoi_output.vtk";
-    voronoi_mesh.Save(output_filename);
-    std::cout << "Saved Voronoi tessellation to " << output_filename << std::endl;
+  return c;
+}
+// ===================== Cube helper =====================
+PolyhedronRaw make_cube(double L) {
+  std::vector<Vec3> V = {
+      Vec3(-L,-L,-L), Vec3(+L,-L,-L), Vec3(+L,+L,-L), Vec3(-L,+L,-L),
+      Vec3(-L,-L,+L), Vec3(+L,-L,+L), Vec3(+L,+L,+L), Vec3(-L,+L,+L)
+  };
+  PolyhedronRaw poly;
+  poly.push_back({V[0],V[1],V[2],V[3]});
+  poly.push_back({V[4],V[5],V[6],V[7]});
+  poly.push_back({V[0],V[4],V[5],V[1]});
+  poly.push_back({V[1],V[5],V[6],V[2]});
+  poly.push_back({V[2],V[6],V[7],V[3]});
+  poly.push_back({V[3],V[7],V[4],V[0]});
+  return poly;
+}
 
-    return 0;
+// ===================== Main example =====================
+int main() {
+  PolyhedronRaw cube = make_cube(1.0);
+
+  // Example clipping plane x+y+z-0.5=0
+  Vec3 n(1,1,1); n = normalize(n);
+  double d = -0.5 / sqrt(3.0); // normalize plane
+  Plane pl(n,d);
+
+  PolyhedronRaw clipped_raw = clip_polyhedron(cube, pl);
+  Polyhedron poly = unify_vertices(clipped_raw);
+
+  // INMOST initialization
+  Mesh mesh;
+  Cell cell = add_polyhedron_to_inmost(&mesh, poly);
+
+  std::cout << "Created INMOST cell with " << poly.faces.size() << " faces and "
+            << poly.vertices.size() << " vertices." << std::endl;
+
+  // Save the result to a VTK file
+  std::string output_filename = "voronoi_output.vtk";
+  mesh.Save(output_filename);
+  std::cout << "Saved Voronoi tessellation to " << output_filename << std::endl;
+
+  return 0;
 }
