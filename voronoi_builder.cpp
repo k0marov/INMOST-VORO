@@ -109,8 +109,6 @@ Mesh VoronoiBuilder::build() {
                             double ny_coord = std::get<1>(seeds[neighbor_seed_index]);
                             double nz_coord = std::get<2>(seeds[neighbor_seed_index]);
 
-//                          std::cout << "neighbor: " << nx_coord << ' ' << ny_coord << ' ' << nz_coord <<'\n';
-
                             double a = 2 * (nx_coord - x);
                             double b = 2 * (ny_coord - y);
                             double c = 2 * (nz_coord - z);

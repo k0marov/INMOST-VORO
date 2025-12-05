@@ -1,5 +1,6 @@
 #include "inmost.h"
 #include "voronoi_builder.h"
+#include "helpers.h"
 #include <iostream>
 #include <vector>
 #include <fstream>
@@ -49,6 +50,7 @@ int main(int argc, char ** argv)
     Mesh voronoi_mesh = builder.build();
 
 //    for (auto s : seeds) {
+//      std::cout << "created cube for seed " << get<0>(s) << ' ' << get<1>(s) << ' ' << get<2>(s) << '\n';
 //      CreateCubeAtPoint(&voronoi_mesh, get<0>(s), get<1>(s), get<2>(s), 0.1, 0.1, 0.1);
 ////      voronoi_mesh.CreateNode({get<0>(s), get<1>(s), get<2>(s)})
 //    }
