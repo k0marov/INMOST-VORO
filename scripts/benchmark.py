@@ -30,6 +30,21 @@ def main():
         
         generate_points(n, points_filename)
 
+        # 1. Run voro++
+        print(f"  Running voro++...")
+        start_time_voropp = time.time()
+        try:
+            subprocess.run(
+                ['voro++', '-g', '-c', '%i %x %y %z %n %V', '0', '1', '0', '1', '0', '1', points_filename],
+                capture_output=True, text=True, check=True
+            )
+            elapsed_time_voropp = time.time() - start_time_voropp
+            print(f"  voro++ took: {elapsed_time_voropp:.4f} seconds")
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            print(f"  Error running voro++: {e}")
+            os.remove(points_filename)
+            continue
+
         # 2. Run Voro tessellation
         print(f"  Running Voro tessellation...")
         start_time_voro = time.time()
