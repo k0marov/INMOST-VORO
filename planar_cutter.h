@@ -4,213 +4,188 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
-#include <utility>
 #include <vector>
+#include <map>
 
 #include "inmost.h" // Make sure INMOST include path is set
 using namespace INMOST;
 
-const double EPS = 1e-9;
+const double EPS = 1e-12;
 
-// ===================== Vector and Plane =====================
+// ===================== Vector =====================
 struct Vec3 {
-  double x, y, z;
+  double x,y,z;
   Vec3() : x(0), y(0), z(0) {}
   Vec3(double X, double Y, double Z) : x(X), y(Y), z(Z) {}
-  Vec3 operator+(const Vec3 &b) const { return Vec3(x+b.x, y+b.y, z+b.z); }
-  Vec3 operator-(const Vec3 &b) const { return Vec3(x-b.x, y-b.y, z-b.z); }
-  Vec3 operator*(double s) const { return Vec3(x*s, y*s, z*s); }
+  Vec3 operator-(const Vec3& b) const { return {x-b.x, y-b.y, z-b.z}; }
+  Vec3 operator+(const Vec3& b) const { return {x+b.x, y+b.y, z+b.z}; }
+  Vec3 operator*(double s) const { return {x*s, y*s, z*s}; }
 };
 
-static Vec3 cross(const Vec3 &a, const Vec3 &b) {
-  return Vec3(a.y*b.z - a.z*b.y, a.z*b.x - a.x*b.z, a.x*b.y - a.y*b.x);
+inline double dot(const Vec3& a, const Vec3& b) { return a.x*b.x + a.y*b.y + a.z*b.z; }
+inline Vec3 cross(const Vec3& a, const Vec3& b) {
+  return {a.y*b.z - a.z*b.y, a.z*b.x - a.x*b.z, a.x*b.y - a.y*b.x};
 }
-static double dot(const Vec3 &a,const Vec3 &b){ return a.x*b.x + a.y*b.y + a.z*b.z; }
-static double norm(const Vec3 &a){ return sqrt(dot(a,a)); }
-static Vec3 normalize(const Vec3 &a){ double n=norm(a); return n<1e-15 ? a : a*(1.0/n); }
+inline double length(const Vec3& v) { return std::sqrt(dot(v,v)); }
+inline Vec3 normalize(const Vec3& v) {
+  double l = length(v);
+  return l<EPS ? v : v*(1.0/l);
+}
 
-struct Plane {
-  Vec3 n; // normal
-  double d;
-  Plane() : n(), d(0) {}
-  Plane(const Vec3 &N, double D) : n(N), d(D) {}
-  double distance(const Vec3 &p) const { return dot(n,p)+d; }
-};
-
-// ===================== Polyhedron Representation =====================
-using FaceRaw = std::vector<Vec3>;
-using PolyhedronRaw = std::vector<FaceRaw>; // each face: list of points
-
-struct Polyhedron {
+// ===================== GFace & GCell =====================
+struct GFace {
+  Vec3 normal;
   std::vector<Vec3> vertices;
-  std::vector<std::vector<int>> faces; // faces use vertex indices
 };
 
-// ===================== Helper functions =====================
-Vec3 intersect_segment_plane(const Vec3 &p, const Vec3 &q, const Plane &pl) {
-  double dp = pl.distance(p);
-  double dq = pl.distance(q);
-  double t = dp - dq;
-  if (fabs(t)<1e-15) return p;
-  double alpha = dp / (dp - dq);
-  if (alpha < 0) alpha = 0;
-  if (alpha > 1) alpha = 1;
-  return p + (q - p) * alpha;
+struct GCell {
+  std::vector<GFace> faces;
+};
+
+// ===================== Plane intersection =====================
+inline bool segmentPlaneIntersection(const Vec3& p0, const Vec3& p1,
+                                     const Vec3& planePoint, const Vec3& planeNormal,
+                                     Vec3& outIntersect)
+{
+  Vec3 dir = p1 - p0;
+  double denom = dot(planeNormal, dir);
+  if (std::abs(denom) < EPS) return false;
+  double t = dot(planePoint - p0, planeNormal) / denom;
+  if (t < -EPS || t > 1.0+EPS) return false;
+  outIntersect = p0 + dir*t;
+  return true;
 }
 
-FaceRaw clip_polygon_by_plane(const FaceRaw &poly, const Plane &pl, std::vector<Vec3> &intersections) {
-  FaceRaw out;
-  if (poly.empty()) return out;
-  int m = (int)poly.size();
-  for (int i=0;i<m;i++){
-    Vec3 A=poly[i]; Vec3 B=poly[(i+1)%m];
-    double da=pl.distance(A); double db=pl.distance(B);
-    bool ina=(da<=EPS), inb=(db<=EPS);
-    if (ina && inb) { out.push_back(B); }
-    else if (ina && !inb) { Vec3 I=intersect_segment_plane(A,B,pl); out.push_back(I); intersections.push_back(I); }
-    else if (!ina && inb) { Vec3 I=intersect_segment_plane(A,B,pl); out.push_back(I); out.push_back(B); intersections.push_back(I); }
-  }
-  // remove near-duplicate consecutive vertices
-  FaceRaw cleaned;
-  for (auto &v : out) {
-    if (cleaned.empty()) cleaned.push_back(v);
-    else if (norm(v-cleaned.back())>1e-12) cleaned.push_back(v);
-  }
-  if (cleaned.size()>=2 && norm(cleaned.front()-cleaned.back())<1e-12) cleaned.pop_back();
-  return cleaned;
+inline Vec3 centroid(const std::vector<Vec3>& pts) {
+  Vec3 c{0,0,0};
+  for(auto& p : pts) c = c + p;
+  return c * (1.0/pts.size());
 }
 
-std::vector<Vec3> unique_points(const std::vector<Vec3> &pts, double tol=1e-9) {
-  std::vector<Vec3> res;
-  for (auto &p : pts) {
-    bool found=false;
-    for (auto &q : res) if (norm(p-q)<=tol){found=true; break;}
-    if (!found) res.push_back(p);
-  }
-  return res;
-}
+// ===================== Clip GCell by Plane =====================
+inline void clipGCellByPlane(GCell& cell, const Vec3& planePoint, const Vec3& planeNormal) {
+  std::vector<GFace> newGFaces;
+  std::vector<Vec3> planeIntersections;
 
-FaceRaw sort_points_on_plane(const std::vector<Vec3> &pts, const Plane &pl) {
-  FaceRaw ordered;
-  if (pts.size()<3) return ordered;
-  Vec3 centroid(0,0,0);
-  for (auto &p: pts) centroid = centroid + p;
-  centroid = centroid * (1.0/pts.size());
-  Vec3 n = normalize(pl.n);
-  Vec3 arbitrary = fabs(n.x)<0.9 ? Vec3(1,0,0) : Vec3(0,1,0);
-  Vec3 u = normalize(cross(n, arbitrary));
-  Vec3 v = cross(n,u);
-  std::vector<std::pair<double, Vec3>> ang_pts;
-  for (auto &p : pts) {
-    Vec3 rel = p - centroid;
-    double angle = atan2(dot(rel,v), dot(rel,u));
-    ang_pts.emplace_back(angle,p);
-  }
-  std::sort(ang_pts.begin(), ang_pts.end(), [](auto &a, auto &b){return a.first<b.first;});
-  for (auto &ap : ang_pts) ordered.push_back(ap.second);
-  return ordered;
-}
+  for(auto& face : cell.faces) {
+    std::vector<Vec3> newVerts;
+    int N = face.vertices.size();
+    for(int i=0;i<N;i++) {
+      Vec3 curr = face.vertices[i];
+      Vec3 next = face.vertices[(i+1)%N];
+      double dCurr = dot(curr - planePoint, planeNormal);
+      double dNext = dot(next - planePoint, planeNormal);
 
-// ===================== Polyhedron clipping =====================
-PolyhedronRaw clip_polyhedron(const PolyhedronRaw &poly, const Plane &pl) {
-  PolyhedronRaw newpoly;
-  std::vector<Vec3> all_intersections;
-  for (auto &face : poly) {
-    FaceRaw clipped = clip_polygon_by_plane(face, pl, all_intersections);
-    if (clipped.size()>=3) newpoly.push_back(clipped);
-  }
-  std::vector<Vec3> uniq = unique_points(all_intersections,1e-9);
-  if (uniq.size()>=3) {
-    FaceRaw cap = sort_points_on_plane(uniq,pl);
-    if (cap.size()>=3) {
-      Vec3 e1=cap[1]-cap[0], e2=cap[2]-cap[0];
-      Vec3 capn=normalize(cross(e1,e2));
-      if (dot(capn,pl.n)>0) std::reverse(cap.begin(),cap.end());
-      newpoly.push_back(cap);
+      if(dCurr >= -EPS) newVerts.push_back(curr);
+
+      Vec3 inter;
+      if((dCurr > EPS && dNext < -EPS) || (dCurr < -EPS && dNext > EPS)) {
+        if(segmentPlaneIntersection(curr, next, planePoint, planeNormal, inter)) {
+          newVerts.push_back(inter);
+          planeIntersections.push_back(inter);
+        }
+      }
+    }
+    if(newVerts.size() >= 3) {
+      face.vertices = newVerts;
+      newGFaces.push_back(face);
     }
   }
-  return newpoly;
+
+  if(planeIntersections.size() >= 3) {
+    Vec3 c = centroid(planeIntersections);
+    Vec3 n = planeNormal;
+
+    auto sortedVerts = planeIntersections;
+    std::sort(sortedVerts.begin(), sortedVerts.end(),
+              [&c,&n](const Vec3& a, const Vec3& b){
+                Vec3 va = a-c, vb = b-c;
+                double angle = atan2(dot(cross(va,vb), n), dot(va,vb));
+                return angle > 0;
+              });
+
+    GFace newGFace;
+    newGFace.normal = n;
+    newGFace.vertices = sortedVerts;
+    newGFaces.push_back(newGFace);
+  }
+
+  cell.faces = newGFaces;
 }
 
-// ===================== Convert to shared-vertex Polyhedron =====================
-Polyhedron unify_vertices(const PolyhedronRaw &raw, double tol=1e-12) {
-  Polyhedron out;
-  auto find_or_add = [&](const Vec3 &v){
-    for (int i=0;i<(int)out.vertices.size();++i)
-      if (norm(out.vertices[i]-v)<tol) return i;
-    out.vertices.push_back(v);
-    return (int)out.vertices.size()-1;
-  };
-  for (auto &face_raw : raw) {
-    std::vector<int> f;
-    f.reserve(face_raw.size());
-    for (auto &v: face_raw) f.push_back(find_or_add(v));
-    out.faces.push_back(std::move(f));
+// ===================== Bounding Cube =====================
+inline GCell createBoundingCube(const Vec3& seed, const std::vector<Vec3>& neighbors, double margin=1.0) {
+  double minX = seed.x, maxX = seed.x;
+  double minY = seed.y, maxY = seed.y;
+  double minZ = seed.z, maxZ = seed.z;
+
+  for(auto& n : neighbors) {
+    if(n.x<minX) minX=n.x; if(n.x>maxX) maxX=n.x;
+    if(n.y<minY) minY=n.y; if(n.y>maxY) maxY=n.y;
+    if(n.z<minZ) minZ=n.z; if(n.z>maxZ) maxZ=n.z;
   }
-  return out;
+
+  minX-=margin; maxX+=margin;
+  minY-=margin; maxY+=margin;
+  minZ-=margin; maxZ+=margin;
+
+  std::vector<Vec3> v = {
+      {minX,minY,minZ},{maxX,minY,minZ},{maxX,maxY,minZ},{minX,maxY,minZ},
+      {minX,minY,maxZ},{maxX,minY,maxZ},{maxX,maxY,maxZ},{minX,maxY,maxZ}
+  };
+
+  GCell cell;
+  cell.faces = {
+      {{0,0,-1},{v[0],v[1],v[2],v[3]}},
+      {{0,0,1},{v[4],v[5],v[6],v[7]}},
+      {{-1,0,0},{v[0],v[3],v[7],v[4]}},
+      {{1,0,0},{v[1],v[2],v[6],v[5]}},
+      {{0,-1,0},{v[0],v[1],v[5],v[4]}},
+      {{0,1,0},{v[3],v[2],v[6],v[7]}}
+  };
+  return cell;
+}
+
+// ===================== Voronoi GCell =====================
+inline GCell createVoronoiCell(const Vec3& seed, const std::vector<Vec3>& neighbors){
+  GCell cell = createBoundingCube(seed, neighbors, 1.0);
+
+  for(auto& n : neighbors) {
+    Vec3 dir = seed - n;
+    Vec3 planeNormal = normalize(dir);
+    Vec3 planePoint = seed + (n-seed)*0.5;
+    clipGCellByPlane(cell, planePoint, planeNormal);
+  }
+
+  return cell;
 }
 
 // ===================== INMOST conversion =====================
-Cell add_polyhedron_to_inmost(Mesh *mesh, const Polyhedron &poly) {
-  mesh->BeginModification();  // Begin modification epoch
+inline GCell add_polyhedron_to_inmost(Mesh* mesh, const GCell& cell) {
+  mesh->BeginModification();
 
-  // 1. Create nodes using ElementArray and const real* coordinates
   ElementArray<Node> nodes(mesh);
-  nodes.reserve(poly.vertices.size());
-  for (const auto &v : poly.vertices) {
-    const Storage::real coords[3] = {v.x, v.y, v.z};
-    auto n = mesh->CreateNode(coords);  // assuming pair return
-    nodes.push_back(n);
-    // optionally: check 'created'
-  }
+  nodes.reserve(1000); // heuristic
 
-  // 2. Create faces using ElementArray
   ElementArray<Face> faces(mesh);
-  faces.reserve(poly.faces.size());
-  for (const auto &fidx : poly.faces) {
+  faces.reserve(cell.faces.size());
+
+  for(const auto& f : cell.faces) {
     ElementArray<Node> fnodes(mesh);
-    fnodes.reserve(fidx.size());
-    for (int vid : fidx) fnodes.push_back(nodes[vid]);
-    auto [f, created] = mesh->CreateFace(fnodes);  // assuming pair return
-    faces.push_back(f);
+    fnodes.reserve(f.vertices.size());
+    for(const auto& v : f.vertices) {
+      const Storage::real coords[3] = {v.x, v.y, v.z};
+      fnodes.push_back(mesh->CreateNode(coords));
+    }
+    auto [faceObj, createdGFace] = mesh->CreateFace(fnodes);
+    faces.push_back(faceObj);
   }
 
-  // 3. Create cell from faces
-  auto [c, created] = mesh->CreateCell(faces);  // assuming pair return
+  auto [cellObj, createdGCell] = mesh->CreateCell(faces);
 
-  mesh->EndModification();  // Finish modification epoch
+  mesh->EndModification();
 
-  return c;
-}
-// ===================== Cube helper =====================
-// Create a rectangular cuboid/polyhedron with system bounds
-PolyhedronRaw create_cube(double min_x, double max_x,
-                          double min_y, double max_y,
-                          double min_z, double max_z)
-{
-  PolyhedronRaw poly;
-
-  // 8 vertices of the cuboid
-  std::vector<Vec3> V = {
-      Vec3(min_x, min_y, min_z),
-      Vec3(max_x, min_y, min_z),
-      Vec3(max_x, max_y, min_z),
-      Vec3(min_x, max_y, min_z),
-      Vec3(min_x, min_y, max_z),
-      Vec3(max_x, min_y, max_z),
-      Vec3(max_x, max_y, max_z),
-      Vec3(min_x, max_y, max_z)
-  };
-
-  // 6 faces of the cuboid (each face is a vector of vertices in CCW order)
-  poly.push_back({V[0], V[1], V[2], V[3]}); // bottom face (z = min_z)
-  poly.push_back({V[4], V[5], V[6], V[7]}); // top face (z = max_z)
-  poly.push_back({V[0], V[1], V[5], V[4]}); // front face (y = min_y)
-  poly.push_back({V[1], V[2], V[6], V[5]}); // right face (x = max_x)
-  poly.push_back({V[2], V[3], V[7], V[6]}); // back face (y = max_y)
-  poly.push_back({V[3], V[0], V[4], V[7]}); // left face (x = min_x)
-
-  return poly;
+  return cell;
 }
 
 #endif // GEOMETRY_H

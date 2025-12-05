@@ -5,6 +5,8 @@
 #include <map>
 #include <tuple>
 
+using std::get;
+
 // Custom comparator for Point3D to use it in a map
 //struct Point3DComparator {
 //    bool operator()(const Point3D& a, const Point3D& b) const {
@@ -16,15 +18,15 @@
 //};
 //
 
-Plane bisector_plane(const Vec3 &seed, const Vec3 &neighbor) {
-  Vec3 midpoint = (seed + neighbor) * 0.5;
-  Vec3 normal = normalize(neighbor - seed); // points from seed toward neighbor
-  double d = -dot(normal, midpoint);         // plane passes through midpoint
-  // To keep the seed point "inside", flip normal if necessary
-  if(dot(normal, seed) + d > 0) normal = normal * -1;
-  return Plane(normal, d);
-}
-
+//Plane bisector_plane(const Vec3 &seed, const Vec3 &neighbor) {
+//  Vec3 midpoint = (seed + neighbor) * 0.5;
+//  Vec3 normal = normalize(neighbor - seed); // points from seed toward neighbor
+//  double d = -dot(normal, midpoint);         // plane passes through midpoint
+//  // To keep the seed point "inside", flip normal if necessary
+//  if(dot(normal, seed) + d > 0) normal = normal * -1;
+//  return Plane(normal, d);
+//}
+//
 VoronoiBuilder::VoronoiBuilder(const std::vector<std::tuple<double, double, double>>& seeds, SystemSize system_size)
     : seeds(seeds), system_size(system_size) {
 
@@ -100,7 +102,7 @@ Mesh VoronoiBuilder::build() {
         if (ix < 0 || ix >= nx || iy < 0 || iy >= ny || iz < 0 || iz >= nz) continue;
 
         // 1. Create initial lightweight Polyhedron
-        PolyhedronRaw current_poly = create_cube(min_x_sys, max_x_sys, min_y_sys, max_y_sys, min_z_sys, max_z_sys);
+//        PolyhedronRaw current_poly = create_cube(min_x_sys, max_x_sys, min_y_sys, max_y_sys, min_z_sys, max_z_sys);
 
         // 2. Collect and sort neighbors
         std::vector<std::pair<double, int>> neighbors;
@@ -122,42 +124,20 @@ Mesh VoronoiBuilder::build() {
             }
         }
         std::sort(neighbors.begin(), neighbors.end());
-
-        // 3. Cut the lightweight Polyhedron
-        for (const auto& neighbor_pair : neighbors) {
-            int neighbor_seed_index = neighbor_pair.second;
-            const auto& s = seeds[neighbor_seed_index];
-            double nx_coord = std::get<0>(s);
-            double ny_coord = std::get<1>(s);
-            double nz_coord = std::get<2>(s);
-
-//            Plane plane;
-//            plane.n = {2 * (nx_coord - x), 2 * (ny_coord - y), 2 * (nz_coord - z)};
-//            double norm = plane.n.x*plane.n.x + plane.n.y*plane.n.y + plane.n.z*plane.n.z;
-//            plane.n = normalize(plane.n);
-//            plane.d = ((nx_coord * nx_coord - x * x) +
-//                      (ny_coord * ny_coord - y * y) +
-//                      (nz_coord * nz_coord - z * z)) / sqrt(norm);
-            Plane plane = bisector_plane({x,y,z}, {nx_coord, ny_coord, nz_coord});
-
-            // The seed point is always on the negative side of the plane as defined.
-            // Therefore, we must always keep the "negative" side of the polyhedron.
-
-            current_poly = clip_polyhedron(current_poly, plane);
-
-            if (current_poly.empty()) {
-                 std::cerr << "Warning: Voronoi cell for seed " << seed_index << " was entirely cut away." << std::endl;
-                 break;
-            } else {
-//              std::cout << "Clipped " << seed_index << '\n';
-            }
+        std::vector<Vec3> npoints;
+        for (auto [_, n] : neighbors) {
+          npoints.push_back(Vec3(get<0>(seeds[n]), get<1>(seeds[n]), get<2>(seeds[n])));
         }
 
+        GCell voro_cell = createVoronoiCell({x, y, z}, npoints);
+
         // 4. If the final polyhedron is valid, add it to the INMOST mesh
-        if (!current_poly.empty()) {
-            std::cout << "--- Polyhedron for seed " << seed_index << " before converting to INMOST ---" << std::endl;
-            add_polyhedron_to_inmost(&global_mesh, unify_vertices(current_poly));
+        if (!voro_cell.faces.empty()) {
+//            std::cout << "--- Polyhedron for seed " << seed_index << " before converting to INMOST ---" << std::endl;
+            add_polyhedron_to_inmost(&global_mesh, voro_cell);
 //            add_polyhedron_to_mesh(&global_mesh, current_poly, seed_index);
+        } else {
+          std::cout << "Voronoi cell for seed " << seed_index << " was entirely cut away.\n";
         }
     }
 
