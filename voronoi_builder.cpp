@@ -94,6 +94,8 @@ Mesh VoronoiBuilder::build() {
         current_voronoi_cell = cutter.Cut(current_voronoi_cell, 0, 0, 1, 1, true);
         current_voronoi_cell = cutter.Cut(current_voronoi_cell, 0, 0, -1, 0, true);
 
+        // Optimization: Collect all neighbors, sort by distance, then cut.
+        std::vector<std::pair<double, int>> neighbors;
         for (int i = -1; i <= 1; ++i) {
             for (int j = -1; j <= 1; ++j) {
                 for (int k = -1; k <= 1; ++k) {
@@ -108,28 +110,41 @@ Mesh VoronoiBuilder::build() {
                             double nx_coord = std::get<0>(seeds[neighbor_seed_index]);
                             double ny_coord = std::get<1>(seeds[neighbor_seed_index]);
                             double nz_coord = std::get<2>(seeds[neighbor_seed_index]);
-
-                            double a = 2 * (nx_coord - x);
-                            double b = 2 * (ny_coord - y);
-                            double c = 2 * (nz_coord - z);
-                            double d = (nx_coord * nx_coord - x * x) +
-                                       (ny_coord * ny_coord - y * y) +
-                                       (nz_coord * nz_coord - z * z);
-                            bool cut_positive =  a*x + b*y + c*z - d < 0;
-                            current_voronoi_cell = cutter.Cut(current_voronoi_cell, a, b, c, d, cut_positive);
-
-                            if (!current_voronoi_cell.isValid()) {
-                                std::cerr << "Warning: Voronoi cell for seed " << seed_index << " was entirely cut away." << std::endl;
-                                cell_was_destroyed = true;
-                                break;
-                            }
+                            double dist_sq = (nx_coord - x) * (nx_coord - x) +
+                                             (ny_coord - y) * (ny_coord - y) +
+                                             (nz_coord - z) * (nz_coord - z);
+                            neighbors.push_back({dist_sq, neighbor_seed_index});
                         }
                     }
-                    if(cell_was_destroyed) break;
                 }
-                if(cell_was_destroyed) break;
             }
-            if(cell_was_destroyed) break;
+        }
+
+        // Sort neighbors by distance (ascending)
+        std::sort(neighbors.begin(), neighbors.end());
+
+        // Cut the cell with the sorted neighbors
+        for (const auto& neighbor_pair : neighbors) {
+            int neighbor_seed_index = neighbor_pair.second;
+
+            double nx_coord = std::get<0>(seeds[neighbor_seed_index]);
+            double ny_coord = std::get<1>(seeds[neighbor_seed_index]);
+            double nz_coord = std::get<2>(seeds[neighbor_seed_index]);
+
+            double a = 2 * (nx_coord - x);
+            double b = 2 * (ny_coord - y);
+            double c = 2 * (nz_coord - z);
+            double d = (nx_coord * nx_coord - x * x) +
+                       (ny_coord * ny_coord - y * y) +
+                       (nz_coord * nz_coord - z * z);
+            bool cut_positive = a * x + b * y + c * z - d < 0;
+            current_voronoi_cell = cutter.Cut(current_voronoi_cell, a, b, c, d, cut_positive);
+
+            if (!current_voronoi_cell.isValid()) {
+                std::cerr << "Warning: Voronoi cell for seed " << seed_index << " was entirely cut away." << std::endl;
+                cell_was_destroyed = true;
+                break;
+            }
         }
     }
 
