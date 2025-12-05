@@ -6,60 +6,24 @@
 #include <tuple>
 
 // Custom comparator for Point3D to use it in a map
-struct Point3DComparator {
-    bool operator()(const Point3D& a, const Point3D& b) const {
-        if (std::abs(a.x - b.x) > GEOMETRY_EPSILON) return a.x < b.x;
-        if (std::abs(a.y - b.y) > GEOMETRY_EPSILON) return a.y < b.y;
-        if (std::abs(a.z - b.z) > GEOMETRY_EPSILON) return a.z < b.z;
-        return false;
-    }
-};
+//struct Point3DComparator {
+//    bool operator()(const Point3D& a, const Point3D& b) const {
+//        if (std::abs(a.x - b.x) > GEOMETRY_EPSILON) return a.x < b.x;
+//        if (std::abs(a.y - b.y) > GEOMETRY_EPSILON) return a.y < b.y;
+//        if (std::abs(a.z - b.z) > GEOMETRY_EPSILON) return a.z < b.z;
+//        return false;
+//    }
+//};
+//
 
-// Converts the final Polyhedron object into an INMOST Cell
-static Cell add_polyhedron_to_mesh(Mesh* m, const Polyhedron& poly, int seed_id) {
-    if (poly.faces.empty()) {
-        return InvalidCell();
-    }
-
-    std::map<Point3D, Node, Point3DComparator> node_map;
-    ElementArray<Face> cell_faces(m);
-
-    for (const auto& poly_face : poly.faces) {
-        if (poly_face.vertices.size() < 3) continue;
-
-        ElementArray<Node> face_nodes(m);
-        for (const auto& pt : poly_face.vertices) {
-            auto it = node_map.find(pt);
-            if (it != node_map.end()) {
-                face_nodes.push_back(it->second);
-            } else {
-                Storage::real coords[3] = {pt.x, pt.y, pt.z};
-                Node new_node = m->CreateNode(coords);
-                node_map[pt] = new_node;
-                face_nodes.push_back(new_node);
-            }
-        }
-        
-        Face new_face = m->CreateFace(face_nodes).first;
-        if (new_face.isValid()) {
-            cell_faces.push_back(new_face);
-        }
-    }
-
-    if (cell_faces.empty()) {
-        return InvalidCell();
-    }
-
-    Cell new_cell = m->CreateCell(cell_faces).first;
-    if (new_cell.isValid()) {
-      std::cout << "Created a valid cell for seed " << seed_id << '\n';
-//        if(m->HaveTag("SEED_ID")) {
-//            new_cell.Integer(m->GetTag("SEED_ID")) = seed_id;
-//        }
-    }
-    return new_cell;
+Plane bisector_plane(const Vec3 &seed, const Vec3 &neighbor) {
+  Vec3 midpoint = (seed + neighbor) * 0.5;
+  Vec3 normal = normalize(neighbor - seed); // points from seed toward neighbor
+  double d = -dot(normal, midpoint);         // plane passes through midpoint
+  // To keep the seed point "inside", flip normal if necessary
+  if(dot(normal, seed) + d > 0) normal = normal * -1;
+  return Plane(normal, d);
 }
-
 
 VoronoiBuilder::VoronoiBuilder(const std::vector<std::tuple<double, double, double>>& seeds, SystemSize system_size)
     : seeds(seeds), system_size(system_size) {
@@ -87,7 +51,7 @@ VoronoiBuilder::VoronoiBuilder(const std::vector<std::tuple<double, double, doub
         ny = static_cast<int>(std::round(ly / ideal_container_side));
         nz = static_cast<int>(std::round(lz / ideal_container_side));
     }
-    
+
     if (nx <= 0) nx = 1;
     if (ny <= 0) ny = 1;
     if (nz <= 0) nz = 1;
@@ -136,7 +100,7 @@ Mesh VoronoiBuilder::build() {
         if (ix < 0 || ix >= nx || iy < 0 || iy >= ny || iz < 0 || iz >= nz) continue;
 
         // 1. Create initial lightweight Polyhedron
-        Polyhedron current_poly = create_cube(min_x_sys, max_x_sys, min_y_sys, max_y_sys, min_z_sys, max_z_sys);
+        PolyhedronRaw current_poly = create_cube(min_x_sys, max_x_sys, min_y_sys, max_y_sys, min_z_sys, max_z_sys);
 
         // 2. Collect and sort neighbors
         std::vector<std::pair<double, int>> neighbors;
@@ -167,29 +131,33 @@ Mesh VoronoiBuilder::build() {
             double ny_coord = std::get<1>(s);
             double nz_coord = std::get<2>(s);
 
-            Plane plane;
-            plane.n = {2 * (nx_coord - x), 2 * (ny_coord - y), 2 * (nz_coord - z)};
-            plane.d = (nx_coord * nx_coord - x * x) +
-                      (ny_coord * ny_coord - y * y) +
-                      (nz_coord * nz_coord - z * z);
-            
+//            Plane plane;
+//            plane.n = {2 * (nx_coord - x), 2 * (ny_coord - y), 2 * (nz_coord - z)};
+//            double norm = plane.n.x*plane.n.x + plane.n.y*plane.n.y + plane.n.z*plane.n.z;
+//            plane.n = normalize(plane.n);
+//            plane.d = ((nx_coord * nx_coord - x * x) +
+//                      (ny_coord * ny_coord - y * y) +
+//                      (nz_coord * nz_coord - z * z)) / sqrt(norm);
+            Plane plane = bisector_plane({x,y,z}, {nx_coord, ny_coord, nz_coord});
+
             // The seed point is always on the negative side of the plane as defined.
             // Therefore, we must always keep the "negative" side of the polyhedron.
-            const bool keep_positive_side = false;
 
-            current_poly = clip_polyhedron(current_poly, plane, keep_positive_side);
+            current_poly = clip_polyhedron(current_poly, plane);
 
-            if (current_poly.faces.empty()) {
+            if (current_poly.empty()) {
                  std::cerr << "Warning: Voronoi cell for seed " << seed_index << " was entirely cut away." << std::endl;
                  break;
+            } else {
+//              std::cout << "Clipped " << seed_index << '\n';
             }
         }
 
         // 4. If the final polyhedron is valid, add it to the INMOST mesh
-        if (!current_poly.faces.empty()) {
+        if (!current_poly.empty()) {
             std::cout << "--- Polyhedron for seed " << seed_index << " before converting to INMOST ---" << std::endl;
-            print_polyhedron(current_poly);
-            add_polyhedron_to_mesh(&global_mesh, current_poly, seed_index);
+            add_polyhedron_to_inmost(&global_mesh, unify_vertices(current_poly));
+//            add_polyhedron_to_mesh(&global_mesh, current_poly, seed_index);
         }
     }
 
