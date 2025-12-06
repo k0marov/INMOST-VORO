@@ -3,7 +3,11 @@
 > [!WARNING]
 > THIS IS WORK IN PROGRESS
 
+
 ![visualization.png](docs/imgs/visualization.png)
+
+**A PDF overview of the project can be found [here](https://skomarov.com/static/distributed_voronoi_remeshing.pdf).**
+
 
 * **VoroLib** — a library with Voronoi-related utilities
 * **Voro** — a command-line executable using the library
