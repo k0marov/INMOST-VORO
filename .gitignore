@@ -1,2 +1,9 @@
 build 
 .DS_Store
+cmake-build-debug
+*.txt
+*.txt.vol
+*.txt.gnu
+*.vol
+*.vtk
+*.obj
