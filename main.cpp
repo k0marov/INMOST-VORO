@@ -87,6 +87,7 @@ static void run_simulation(const SimulationConfig& config) {
         config.target_per_cell,
         stats,
         [&](size_t seed_index, const voronoi::Polyhedron& poly) {
+            // return;
             const uint64_t faces = static_cast<uint64_t>(poly.face_degree.size());
             faces_total += faces;
             faces_max = std::max(faces_max, faces);

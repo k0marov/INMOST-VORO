@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if(MSVC)
   add_compile_options(/O2 /Oi /Ot)
 else()
-  add_compile_options(-O3 -march=native -ffast-math -funroll-loops)
+  add_compile_options(-O3)
 endif()
 
 find_package(inmost REQUIRED)

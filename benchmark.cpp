@@ -35,7 +35,7 @@ static bool run_voro_benchmark(const std::vector<Vec3>& seeds, double& out_s) {
     auto t0 = std::chrono::steady_clock::now();
     // Run voro++ with minimal output to avoid I/O bottleneck
     // -c "%i" just prints ID, which is minimal. Or even better, redirect output to /dev/null
-    std::string cmd = "voro++ -c \"%i\" 0 1 0 1 0 1 " + path + " > /dev/null 2>&1";
+    std::string cmd = "voro++ -c \"%i %q %v %f %v\" 0 1 0 1 0 1 " + path + " > /dev/null 2>&1";
     int code = std::system(cmd.c_str());
     auto t1 = std::chrono::steady_clock::now();
 
@@ -84,53 +84,61 @@ int main(int argc, char** argv) {
         // 2. Run voroqh (Pure)
         voronoi::VoronoiStats stats_pure;
         auto t0_pure = std::chrono::steady_clock::now();
-        voronoi::for_each_polyhedron(voro_seeds, seeds_per_cell, stats_pure, [](size_t, const voronoi::Polyhedron&) {
-            // Minimal callback
+        uint64_t faces_total = 0; 
+        uint64_t faces_max = 0;
+        voronoi::for_each_polyhedron(voro_seeds, seeds_per_cell, stats_pure, [&](size_t seed_index, const voronoi::Polyhedron& poly) {
+            // TODO: check if this really matters
+            return;
+            const uint64_t faces = static_cast<uint64_t>(poly.face_degree.size());
+            faces_total += faces;
+            faces_max = std::max(faces_max, faces);
         });
         auto t1_pure = std::chrono::steady_clock::now();
         double voroqh_time_s = std::chrono::duration<double>(t1_pure - t0_pure).count();
         double voroqh_inner_time_s = stats_pure.total_ms / 1000.0;
         double voroqh_time_per_cell_us = (voroqh_time_s * 1e6) / n;
+        std::cout << "inner time " << voroqh_inner_time_s << "s\n";
 
         // 3. Run INMOST Integration
         // Convert seeds for builder
-        std::vector<std::tuple<double, double, double>> inmost_seeds;
-        inmost_seeds.reserve(n);
-        for(const auto& s : voro_seeds) {
-            inmost_seeds.emplace_back(s.x, s.y, s.z);
-        }
+        // std::vector<std::tuple<double, double, double>> inmost_seeds;
+        // inmost_seeds.reserve(n);
+        // for(const auto& s : voro_seeds) {
+        //     inmost_seeds.emplace_back(s.x, s.y, s.z);
+        // }
         
-        SystemSize system_size = {
-            std::make_pair(0.0, 1.0),
-            std::make_pair(0.0, 1.0),
-            std::make_pair(0.0, 1.0)
-        };
+        // SystemSize system_size = {
+        //     std::make_pair(0.0, 1.0),
+        //     std::make_pair(0.0, 1.0),
+        //     std::make_pair(0.0, 1.0)
+        // };
 
-        auto t0_inmost = std::chrono::steady_clock::now();
-        {
-            VoronoiBuilder builder(inmost_seeds, system_size, seeds_per_cell);
-            Mesh mesh = builder.build();
-            // Force mesh operations if needed, but build() does the work
-        }
-        auto t1_inmost = std::chrono::steady_clock::now();
-        double total_inmost_time_s = std::chrono::duration<double>(t1_inmost - t0_inmost).count();
+        // auto t0_inmost = std::chrono::steady_clock::now();
+        // {
+        //     VoronoiBuilder builder(inmost_seeds, system_size, seeds_per_cell);
+        //     Mesh mesh = builder.build();
+        //     // Force mesh operations if needed, but build() does the work
+        // }
+        // auto t1_inmost = std::chrono::steady_clock::now();
+        // double total_inmost_time_s = std::chrono::duration<double>(t1_inmost - t0_inmost).count();
         
-        // Calculate INMOST creation overhead
-        // We assume Total = Voroqh + INMOST_Overhead
-        // So INMOST_Overhead = Total - Voroqh
-        // Note: There might be slight variance between the two runs, but this is the best approximation.
-        double inmost_creation_time_s = total_inmost_time_s - voroqh_time_s;
-        if (inmost_creation_time_s < 0) inmost_creation_time_s = 0.0; // Should not happen typically
+        // // Calculate INMOST creation overhead
+        // // We assume Total = Voroqh + INMOST_Overhead
+        // // So INMOST_Overhead = Total - Voroqh
+        // // Note: There might be slight variance between the two runs, but this is the best approximation.
+        // double inmost_creation_time_s = total_inmost_time_s - voroqh_time_s;
+        // if (inmost_creation_time_s < 0) inmost_creation_time_s = 0.0; // Should not happen typically
 
         // Output to CSV
         csv << n << "," 
             << voro_plus_time_s << "," 
             << voroqh_time_s << "," 
             << voroqh_time_per_cell_us << "," 
-            << inmost_creation_time_s << "\n";
+            << 0 << "\n";
         
         csv.flush();
-        std::cout << "Done. (voro++: " << voro_plus_time_s << "s, voroqh: " << voroqh_time_s << "s, inmost_overhead: " << inmost_creation_time_s << "s)\n";
+        std::cout << "Done. (voro++: " << voro_plus_time_s << "s, voroqh: " << voroqh_time_s << "s, inmost_overhead: " 
+        << 0 << "s)\n";
     }
 
     std::cout << "Benchmark Suite Completed.\n";
