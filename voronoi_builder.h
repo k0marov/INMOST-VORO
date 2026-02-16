@@ -13,7 +13,7 @@ using SystemSize = std::tuple<std::pair<double, double>, std::pair<double, doubl
 class VoronoiBuilder {
 public:
     // Constructor to initialize the Voronoi builder with seed points and system size.
-    VoronoiBuilder(const std::vector<std::tuple<double, double, double>>& seeds, SystemSize system_size);
+    VoronoiBuilder(const std::vector<std::tuple<double, double, double>>& seeds, SystemSize system_size, int target_per_cell = 25);
 
     // Builds the Voronoi tessellation and returns it as an INMOST mesh.
     Mesh build();
@@ -26,14 +26,7 @@ private:
     std::vector<std::tuple<double, double, double>> seeds;
     // System dimensions.
     SystemSize system_size;
-
-    // Number of minicubes in each dimension.
-    int nx, ny, nz;
-    // Side length of a minicube.
-    double container_size_x, container_size_y, container_size_z;
-
-    // 3D grid of containers to store seed indices.
-    std::vector<std::vector<std::vector<std::vector<int>>>> containers;
+    int target_per_cell;
 };
 
 #endif // CODE_VORONOI_BUILDER_H

@@ -1,3 +1,6 @@
+agent.md
+documentation.md
+.vscode
 build 
 .DS_Store
 cmake-build-debug
