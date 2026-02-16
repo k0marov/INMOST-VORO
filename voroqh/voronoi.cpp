@@ -483,6 +483,52 @@ FloatType compute_polyhedron_volume(const Polyhedron& poly) {
     return static_cast<FloatType>(vol);
 }
 
+void compute_polyhedron_face_areas(const Polyhedron& poly, std::vector<double>& out_areas) {
+    out_areas.clear();
+    out_areas.reserve(poly.face_degree.size());
+    size_t offset = 0;
+    for (uint8_t deg_u8 : poly.face_degree) {
+        const int deg = static_cast<int>(deg_u8);
+        if (deg < 3) {
+            out_areas.push_back(0.0);
+            offset += static_cast<size_t>(deg);
+            continue;
+        }
+
+        const int i0 = poly.face_indices[offset];
+        const Vec3 v0 = poly.vertices[static_cast<size_t>(i0)];
+        
+        double face_area_accum = 0.0;
+        
+        for (int k = 1; k < deg - 1; ++k) {
+            const int i1 = poly.face_indices[offset + static_cast<size_t>(k)];
+            const int i2 = poly.face_indices[offset + static_cast<size_t>(k + 1)];
+            const Vec3 v1 = poly.vertices[static_cast<size_t>(i1)];
+            const Vec3 v2 = poly.vertices[static_cast<size_t>(i2)];
+            
+            Vec3 cross = cross_product(v1 - v0, v2 - v0);
+            double tri_area = std::sqrt(norm2(cross)) * 0.5;
+            face_area_accum += tri_area;
+        }
+        out_areas.push_back(face_area_accum);
+        offset += static_cast<size_t>(deg);
+    }
+}
+
+void write_voro_compatible_output(std::ostream& out, size_t seed_index, const Vec3& seed, const Polyhedron& poly, double vol) {
+    // Format: ID X Y Z Volume Area1 Area2 ... AreaN Volume
+    out << seed_index << " " << seed.x << " " << seed.y << " " << seed.z << " " << vol;
+    
+    std::vector<double> areas;
+    compute_polyhedron_face_areas(poly, areas);
+    
+    for (double a : areas) {
+        out << " " << a;
+    }
+    
+    out << " " << vol << "\n";
+}
+
 void write_polyhedra_vtk(const std::string& path, const std::vector<Polyhedron>& polys, const std::vector<int>& cell_id_per_poly) {
     size_t total_points = 0;
     size_t total_polygons = 0;

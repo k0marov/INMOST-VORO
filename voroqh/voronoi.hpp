@@ -55,6 +55,10 @@ void for_each_polyhedron(
 
 FloatType compute_polyhedron_volume(const Polyhedron& poly);
 
+void compute_polyhedron_face_areas(const Polyhedron& poly, std::vector<double>& out_areas);
+
+void write_voro_compatible_output(std::ostream& out, size_t seed_index, const Vec3& seed, const Polyhedron& poly, double vol);
+
 void write_polyhedra_vtk(
     const std::string& path,
     const std::vector<Polyhedron>& polys,

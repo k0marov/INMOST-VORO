@@ -82,16 +82,22 @@ int main(int argc, char** argv) {
         }
 
         // 2. Run voroqh (Pure)
+        // We write to /dev/null to simulate the same I/O load as voro++
+        std::ofstream voroqh_out("/dev/null"); 
+        
         voronoi::VoronoiStats stats_pure;
         auto t0_pure = std::chrono::steady_clock::now();
         uint64_t faces_total = 0; 
         uint64_t faces_max = 0;
+                    // TODO: check if this really matters
+            // return;
+            // const uint64_t faces = static_cast<uint64_t>(poly.face_degree.size());
+            // faces_total += faces;
+            // faces_max = std::max(faces_max, faces);
+
         voronoi::for_each_polyhedron(voro_seeds, seeds_per_cell, stats_pure, [&](size_t seed_index, const voronoi::Polyhedron& poly) {
-            // TODO: check if this really matters
-            return;
-            const uint64_t faces = static_cast<uint64_t>(poly.face_degree.size());
-            faces_total += faces;
-            faces_max = std::max(faces_max, faces);
+            double vol = voronoi::compute_polyhedron_volume(poly);
+            voronoi::write_voro_compatible_output(voroqh_out, seed_index, voro_seeds[seed_index], poly, vol);
         });
         auto t1_pure = std::chrono::steady_clock::now();
         double voroqh_time_s = std::chrono::duration<double>(t1_pure - t0_pure).count();
