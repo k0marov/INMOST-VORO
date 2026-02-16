@@ -47,6 +47,20 @@ static bool run_voro_benchmark(const std::vector<Vec3>& seeds, double& out_s) {
     return true;
 }
 
+static std::vector<Vec3> read_seeds_from_file(const std::string& path) {
+    std::vector<Vec3> seeds;
+    std::ifstream in(path);
+    if (!in.is_open()) return seeds;
+    
+    // voro++ input format: ID X Y Z
+    int id;
+    double x, y, z;
+    while (in >> id >> x >> y >> z) {
+        seeds.emplace_back(x, y, z);
+    }
+    return seeds;
+}
+
 int main(int argc, char** argv) {
     std::string out_csv = "benchmark_results.csv";
     if (argc > 1) out_csv = argv[1];
@@ -70,15 +84,46 @@ int main(int argc, char** argv) {
     for (int n : N_values) {
         std::cout << "Running N=" << n << "... " << std::flush;
 
-        // Generate Seeds
+        // Generate Seeds and write to file
         const double sys_length = 1.0;
         uint64_t seed_val = 12345;
-        std::vector<Vec3> voro_seeds = voronoi::generate_random_points_box(static_cast<size_t>(n), seed_val, sys_length);
+        std::vector<Vec3> voro_seeds_gen = voronoi::generate_random_points_box(static_cast<size_t>(n), seed_val, sys_length);
+        
+        std::string input_path = "voro_input_bench.txt";
+        {
+            std::ofstream out(input_path);
+            out << std::setprecision(17);
+            for (size_t i = 0; i < voro_seeds_gen.size(); ++i) {
+                out << i << " " << voro_seeds_gen[i].x << " " << voro_seeds_gen[i].y << " " << voro_seeds_gen[i].z << "\n";
+            }
+        }
 
         // 1. Run voro++
+        // We reuse the run_voro_benchmark helper, but we need to modify it slightly to use existing file or just call system directly
+        // Actually, run_voro_benchmark writes the file itself. 
+        // To follow the user's instruction precisely: "generate seeds and write to file before everything ... and then in both of the timers include the time needed for reading the .txt file"
+        
+        // Let's manually run voro++ timing here to be explicit about what is timed.
+        
         double voro_plus_time_s = 0.0;
-        if (!run_voro_benchmark(voro_seeds, voro_plus_time_s)) {
-            voro_plus_time_s = -1.0; // Indicate N/A
+        {
+            int available = std::system("command -v voro++ > /dev/null 2>&1");
+            if (available == 0) {
+                auto t0 = std::chrono::steady_clock::now();
+                // voro++ reads "voro_input_bench.txt" directly
+                std::string cmd = "voro++ -c \"%i %q %v %f %v\" 0 1 0 1 0 1 " + input_path + " > /dev/null 2>&1";
+                int code = std::system(cmd.c_str());
+                auto t1 = std::chrono::steady_clock::now();
+                if (code == 0) {
+                    voro_plus_time_s = std::chrono::duration<double>(t1 - t0).count();
+                } else {
+                    voro_plus_time_s = -1.0;
+                }
+                // Cleanup output file
+                std::remove((input_path + ".vol").c_str());
+            } else {
+                voro_plus_time_s = -1.0;
+            }
         }
 
         // 2. Run voroqh (Pure)
@@ -87,13 +132,13 @@ int main(int argc, char** argv) {
         
         voronoi::VoronoiStats stats_pure;
         auto t0_pure = std::chrono::steady_clock::now();
+        
+        // Step 2a: Read seeds from file
+        std::vector<Vec3> voro_seeds = read_seeds_from_file(input_path);
+        
+        // Step 2b: Compute
         uint64_t faces_total = 0; 
         uint64_t faces_max = 0;
-                    // TODO: check if this really matters
-            // return;
-            // const uint64_t faces = static_cast<uint64_t>(poly.face_degree.size());
-            // faces_total += faces;
-            // faces_max = std::max(faces_max, faces);
 
         voronoi::for_each_polyhedron(voro_seeds, seeds_per_cell, stats_pure, [&](size_t seed_index, const voronoi::Polyhedron& poly) {
             double vol = voronoi::compute_polyhedron_volume(poly);
