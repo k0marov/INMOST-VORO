@@ -16,6 +16,8 @@ endif()
 
 find_package(inmost REQUIRED)
 
+option(BUILD_BENCHMARK "Build the Benchmark executable (requires voro++)" ON)
+
 add_library(VoroLib
 		voronoi_builder.cpp
 		helpers.cpp
@@ -42,9 +44,23 @@ add_executable(Voro main.cpp)
 target_include_directories(Voro PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/voroqh)
 target_link_libraries(Voro PRIVATE VoroLib)
 
-add_executable(Benchmark benchmark.cpp)
-target_include_directories(Benchmark PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/voroqh)
-target_link_libraries(Benchmark PRIVATE VoroLib)
+if(BUILD_BENCHMARK)
+  # Resolve voro++ only for Benchmark
+  find_path(VORO_INCLUDE_DIR
+    NAMES voro++.hh
+    PATH_SUFFIXES "" "voro++"
+  )
+  find_library(VORO_LIBRARY
+    NAMES voro++
+  )
+  if(VORO_INCLUDE_DIR AND VORO_LIBRARY)
+    add_executable(Benchmark benchmark.cpp)
+    target_include_directories(Benchmark PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/voroqh ${VORO_INCLUDE_DIR})
+    target_link_libraries(Benchmark PRIVATE VoroLib ${VORO_LIBRARY})
+  else()
+    message(WARNING "voro++ not found; Benchmark target will not be built. Set -DBUILD_BENCHMARK=OFF to silence this warning.")
+  endif()
+endif()
 
 
 # Installation
