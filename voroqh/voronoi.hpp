@@ -45,6 +45,14 @@ struct VoronoiStats {
     FloatType time_ms_polyhedra = 0.0;
 };
 
+struct TopologyOutput {
+    int index;
+    double volume;
+    int num_faces;
+    std::vector<double> face_areas;
+    std::vector<int> face_edge_counts;
+};
+
 std::vector<Vec3> generate_random_points_box(size_t n, uint64_t seed, FloatType box_len = 1.0);
 
 void for_each_polyhedron(
@@ -57,7 +65,7 @@ FloatType compute_polyhedron_volume(const Polyhedron& poly);
 
 void compute_polyhedron_face_areas(const Polyhedron& poly, std::vector<double>& out_areas);
 
-void write_voro_compatible_output(std::ostream& out, size_t seed_index, const Vec3& seed, const Polyhedron& poly, double vol, std::vector<double>& area_buffer);
+TopologyOutput write_voro_compatible_output(std::ostream& out, size_t seed_index, const Vec3& seed, const Polyhedron& poly, double vol, std::vector<double>& area_buffer);
 
 void write_polyhedra_vtk(
     const std::string& path,
