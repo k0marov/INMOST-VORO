@@ -515,14 +515,13 @@ void compute_polyhedron_face_areas(const Polyhedron& poly, std::vector<double>& 
     }
 }
 
-void write_voro_compatible_output(std::ostream& out, size_t seed_index, const Vec3& seed, const Polyhedron& poly, double vol) {
+void write_voro_compatible_output(std::ostream& out, size_t seed_index, const Vec3& seed, const Polyhedron& poly, double vol, std::vector<double>& area_buffer) {
     // Format: ID X Y Z Volume Area1 Area2 ... AreaN Volume
     out << seed_index << " " << seed.x << " " << seed.y << " " << seed.z << " " << vol;
     
-    std::vector<double> areas;
-    compute_polyhedron_face_areas(poly, areas);
+    compute_polyhedron_face_areas(poly, area_buffer);
     
-    for (double a : areas) {
+    for (double a : area_buffer) {
         out << " " << a;
     }
     
