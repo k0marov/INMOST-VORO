@@ -23,7 +23,7 @@ namespace quickhull {
 	template<>
 	long double defaultEps() {
 		// TODO: think about how much zeroes there should be
-		return 1e-7; 
+		return 1e-16; 
 	}
 	
 	/*

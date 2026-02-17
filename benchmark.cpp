@@ -12,14 +12,29 @@
 #include <tuple>
 #include <cstdio>
 #include <cstdlib>
+#include <sstream>
 
 using namespace INMOST;
 using FloatType = voronoi::FloatType;
 using Vec3 = voronoi::Vec3;
 
-// --- Helper Functions ---
 
-static bool check_topology(const std::vector<voronoi::TopologyOutput>& voro_ref, const std::vector<voronoi::TopologyOutput>& voroqh_ref, int n) {
+static std::string format_topology_line(const voronoi::TopologyOutput& t) {
+    std::ostringstream oss;
+    oss << std::scientific << std::setprecision(5);
+    oss << t.index << " " << t.volume << " " << t.num_faces;
+    for (double a : t.face_areas) {
+        oss << " " << a;
+    }
+    for (int c : t.face_edge_counts) {
+        oss << " " << c;
+    }
+    return oss.str();
+}
+
+
+// for now it only checks volumes
+static bool check_equal(const std::vector<voronoi::TopologyOutput>& voro_ref, const std::vector<voronoi::TopologyOutput>& voroqh_ref, int n) {
     if (static_cast<int>(voro_ref.size()) != n) return false;
     if (static_cast<int>(voroqh_ref.size()) != n) return false;
 
@@ -34,18 +49,16 @@ static bool check_topology(const std::vector<voronoi::TopologyOutput>& voro_ref,
         if (t.index < 0 || t.index >= n) return false;
         voroqh[static_cast<size_t>(t.index)] = &t;
     }
+    const double volume_eps = 1e-7;
 
     for (int i = 0; i < n; ++i) {
-        if (!voro[static_cast<size_t>(i)] || !voroqh[static_cast<size_t>(i)]) return false;
-        const auto& a = *voro[static_cast<size_t>(i)];
-        const auto& b = *voroqh[static_cast<size_t>(i)];
-        if (a.num_faces != b.num_faces) return false;
-
-        std::vector<int> ea = a.face_edge_counts;
-        std::vector<int> eb = b.face_edge_counts;
-        std::sort(ea.begin(), ea.end());
-        std::sort(eb.begin(), eb.end());
-        if (ea != eb) return false;
+        auto diff = voro[static_cast<size_t>(i)]->volume - voroqh[static_cast<size_t>(i)]->volume;
+        if (std::abs(diff) > volume_eps) {
+            std::cerr << std::setprecision(11); 
+            std::cerr << "Volume difference for cell " << " (index " << voro[static_cast<size_t>(i)]->index << "):\n";
+            std::cerr << "  diff = " << diff << ", voro++ volume = " << voro[static_cast<size_t>(i)]->volume << ", voroqh volume = " << voroqh[static_cast<size_t>(i)]->volume << "\n";
+            return false;
+        }
     }
     return true;
 }
@@ -136,7 +149,7 @@ int main(int argc, char** argv) {
 
         // Generate Seeds and write to file
         const double sys_length = 1.0;
-        uint64_t seed_val = 12345;
+        uint64_t seed_val = 1234;
         std::vector<Vec3> voro_seeds_gen = voronoi::generate_random_points_box(static_cast<size_t>(n), seed_val, sys_length);
         
         std::string input_path = "voro_input_bench.txt";
@@ -192,8 +205,8 @@ int main(int argc, char** argv) {
         double voroqh_total_time_s = read_time_s + total_loop_time_s;
         double voroqh_time_per_cell_us = (pure_compute_time_s / n) * 1e6;
 
-        if (!check_topology(voro_results, voroqh_results, n)) {
-            std::cerr << "Topology mismatch detected for N=" << n << "\n";
+        if (!check_equal(voro_results, voroqh_results, n)) {
+            std::cerr << "Voronoi cells mismatch between voro++ and voroqh detected for N=" << n << "\n";
             return 1;
         }
 

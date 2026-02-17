@@ -297,12 +297,13 @@ static VoronoiCell build_cell(
         for (const auto& v : cell.vertices) {
             max_dist_sq = std::max(max_dist_sq, norm2(v));
         }
-        const FloatType max_dist = std::sqrt(max_dist_sq);
         const FloatType safe_dist = current_dist * 0.5;
 
-        if (max_dist < safe_dist || current_dist > grid.cell_size * grid.cells_per_axis * 1.5) {
+        if (max_dist_sq+1e-7 < safe_dist*safe_dist || current_dist > grid.cell_size * grid.cells_per_axis * 1.5) {
             return cell;
         }
+
+        const FloatType max_dist = std::sqrt(max_dist_sq);
 
         prev_dist = current_dist;
         const FloatType target_radius = max_dist * 2;
