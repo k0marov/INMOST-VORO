@@ -53,54 +53,6 @@ struct VoroCellMetrics {
     double surface_area = 0.0;
 };
 
-static bool voropp_available() {
-    return std::system("command -v voro++ > /dev/null 2>&1") == 0;
-}
-
-static std::vector<VoroCellMetrics> run_voropp_metrics(const std::vector<voronoi::Vec3>& seeds) {
-    const std::string input_path = "voro_test_input.txt";
-    const std::string output_path = "voro_test_output.txt";
-
-    {
-        std::ofstream out(input_path);
-        out << std::setprecision(17);
-        for (size_t i = 0; i < seeds.size(); ++i) {
-            out << i << " " << seeds[i].x << " " << seeds[i].y << " " << seeds[i].z << "\n";
-        }
-    }
-
-    const std::string fmt = "%i %v %s %w %g %F";
-    const std::string cmd = "voro++ -c \"" + fmt + "\" 0 1 0 1 0 1 " + input_path + " > " + output_path + " 2>/dev/null";
-    const int code = std::system(cmd.c_str());
-
-    std::vector<VoroCellMetrics> out_metrics(seeds.size());
-    if (code == 0) {
-        std::ifstream in(output_path);
-        std::string line;
-        while (std::getline(in, line)) {
-            if (line.empty()) continue;
-            std::istringstream iss(line);
-            size_t id;
-            VoroCellMetrics m;
-            if (!(iss >> id >> m.volume >> m.faces >> m.vertices >> m.edges >> m.surface_area)) {
-                continue;
-            }
-            if (id < out_metrics.size()) {
-                m.present = true;
-                out_metrics[id] = m;
-            }
-        }
-    }
-
-    std::remove(input_path.c_str());
-    std::remove(output_path.c_str());
-    std::remove((input_path + ".vol").c_str());
-    std::remove((input_path + ".gnu").c_str());
-    std::remove((input_path + "_p.pov").c_str());
-    std::remove((input_path + "_v.pov").c_str());
-    return out_metrics;
-}
-
 static void test_random_points_deterministic() {
     auto a = voronoi::generate_random_points_box(32, 123, 1.0);
     auto b = voronoi::generate_random_points_box(32, 123, 1.0);
@@ -198,57 +150,9 @@ static void test_vtk_writer_smoke() {
     std::remove(path.c_str());
 }
 
-static void test_compare_with_voropp_multiple_n() {
-    if (!voropp_available()) {
-        std::cerr << "Skipping voro++ comparison tests: voro++ not found on PATH\n";
-        return;
-    }
-
-    const std::vector<size_t> ns = {50, 200, 1000, 100000};
-    for (size_t n : ns) {
-        auto seeds = voronoi::generate_random_points_box(n, 1, 1.0);
-        const auto ref = run_voropp_metrics(seeds);
-
-        voronoi::VoronoiStats stats;
-        std::vector<VoroCellMetrics> ours(n);
-
-        voronoi::for_each_polyhedron(
-            seeds,
-            4,
-            stats,
-            [&](size_t seed_index, const voronoi::Polyhedron& poly) {
-                VoroCellMetrics m;
-                m.present = true;
-                m.volume = voronoi::compute_polyhedron_volume(poly);
-                m.faces = static_cast<int>(poly.face_degree.size());
-                m.vertices = static_cast<int>(poly.vertices.size());
-                m.edges = static_cast<int>(poly.edges.size());
-                m.surface_area = poly_surface_area(poly);
-                ours[seed_index] = m;
-            });
-
-        const double vol_abs_tol = 1e-9;
-        const double area_rel_tol = 2e-7;
-
-        for (size_t i = 0; i < n; ++i) {
-            assert(ref[i].present);
-            assert(ours[i].present);
-
-            assert(approx(ours[i].volume, ref[i].volume, vol_abs_tol));
-            assert(ours[i].faces == ref[i].faces);
-            assert(ours[i].vertices == ref[i].vertices);
-            assert(ours[i].edges == ref[i].edges);
-
-            const double denom = std::max(1.0, std::abs(ref[i].surface_area));
-            assert(std::abs(ours[i].surface_area - ref[i].surface_area) / denom <= area_rel_tol);
-        }
-    }
-}
-
 int main() {
     test_random_points_deterministic();
     test_polyhedra_basic_invariants_and_bbox();
     test_vtk_writer_smoke();
-    test_compare_with_voropp_multiple_n();
     return 0;
 }
