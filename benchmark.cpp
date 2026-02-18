@@ -38,18 +38,18 @@ static std::string format_topology_line(const voronoi::TopologyOutput& t) {
     return oss.str();
 }
 
-static bool compare_topology(const std::vector<voronoi::TopologyOutput>& a_ref,
-                             const std::vector<voronoi::TopologyOutput>& b_ref,
+static bool validate_diagram(const std::vector<voronoi::TopologyOutput>& voropp_out,
+                             const std::vector<voronoi::TopologyOutput>& voroqh_out,
                              int n) {
-    if (static_cast<int>(a_ref.size()) != n) return false;
-    if (static_cast<int>(b_ref.size()) != n) return false;
+    if (static_cast<int>(voropp_out.size()) != n) return false;
+    if (static_cast<int>(voroqh_out.size()) != n) return false;
     std::vector<const voronoi::TopologyOutput*> a(n, nullptr);
     std::vector<const voronoi::TopologyOutput*> b(n, nullptr);
-    for (const auto& t : a_ref) {
+    for (const auto& t : voropp_out) {
         if (t.index < 0 || t.index >= n) return false;
         a[static_cast<size_t>(t.index)] = &t;
     }
-    for (const auto& t : b_ref) {
+    for (const auto& t : voroqh_out) {
         if (t.index < 0 || t.index >= n) return false;
         b[static_cast<size_t>(t.index)] = &t;
     }
@@ -90,26 +90,25 @@ static bool compare_topology(const std::vector<voronoi::TopologyOutput>& a_ref,
             return false;
         }
     }
-    {
-        auto sum_sorted = [](const std::vector<double>& v) {
-            std::vector<double> tmp = v;
-            std::sort(tmp.begin(), tmp.end(), [](double x, double y) {
-                return std::abs(x) < std::abs(y);
-            });
-            long double s = 0.0L;
-            for (double x : tmp) s += static_cast<long double>(x);
-            return static_cast<double>(s);
-        };
-        double sum_vol_a = sum_sorted(vols_a);
-        double sum_vol_b = sum_sorted(vols_b);
-        double diff_a = sum_vol_a - 1.0;
-        double diff_b = sum_vol_b - 1.0;
-        std::ostringstream oss;
-        oss << std::scientific << std::setprecision(5);
-        oss << "Total volume diff from 1: voro++ = " << diff_a
-            << ", voroqh = " << diff_b << "\n";
-        std::cout << oss.str();
-    }
+    std::cout << "Consistency checks between voro++ and voroqh passed for N = " << n << '\n'; 
+    auto sum_sorted = [](const std::vector<double>& v) {
+        std::vector<double> tmp = v;
+        std::sort(tmp.begin(), tmp.end(), [](double x, double y) {
+            return std::abs(x) < std::abs(y);
+        });
+        long double s = 0.0L;
+        for (double x : tmp) s += static_cast<long double>(x);
+        return static_cast<double>(s);
+    };
+    double sum_vol_a = sum_sorted(vols_a);
+    double sum_vol_b = sum_sorted(vols_b);
+    double diff_a = sum_vol_a - 1.0;
+    double diff_b = sum_vol_b - 1.0;
+    std::ostringstream oss;
+    oss << std::scientific << std::setprecision(5);
+    oss << "Total volume diff from expected volume for unit cube (1.0):\nvoro++ = " << diff_a
+        << ", voroqh = " << diff_b << "\n";
+    std::cout << oss.str();
     return true;
 }
 
@@ -243,8 +242,8 @@ int main(int argc, char** argv) {
         double voro_time_s = 0.0;
         auto voro_topos = run_voro_library(seeds, voro_time_s);
 
-        if (!compare_topology(voro_topos, voroqh_topos, n)) {
-            std::cerr << "Topology mismatch detected for N=" << n << "\n";
+        if (!validate_diagram(voro_topos, voroqh_topos, n)) {
+            std::cerr << "Mismatch detected for N=" << n << "\n";
             return 1;
         }
 
