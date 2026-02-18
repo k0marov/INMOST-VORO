@@ -56,8 +56,14 @@ struct VoroCellMetrics {
 
 static void test_polyhedra_topology_and_euler() {
     const size_t n = 4096;
-    std::cout << "Test polyhedra_topology_and_euler: N=4096 seeds in unit box, seed=42, check V,E,F and Euler characteristic V-E+F=2 with E derived from sum(face_degree) ...";
-    auto seeds = voronoi::generate_random_points_box(n, 42, 1.0);
+    const uint64_t seed = 42;
+
+    std::cout << "N=" << n
+              << " seeds in unit box, seed=" << seed
+              << ", check V,E,F and Euler characteristic V-E+F=2 with E derived from sum(face_degree)";
+    std::cout.flush();
+
+    auto seeds = voronoi::generate_random_points_box(n, seed, 1.0);
     voronoi::VoronoiStats stats;
 
     size_t cell_count = 0;
@@ -90,13 +96,19 @@ static void test_polyhedra_topology_and_euler() {
         });
 
     assert(cell_count == n);
-    std::cout << " OK\n\n";
 }
 
 static void test_polyhedra_basic_invariants_and_bbox() {
     const size_t n = 4096;
-    std::cout << "Test polyhedra_basic_invariants_and_bbox: N=4096 seeds in unit box, seed=1, check volume_sum≈1.0, vertex indices, and global bbox within [0,1]^3 plus eps=1e-7 ...";
-    auto seeds = voronoi::generate_random_points_box(n, 1, 1.0);
+    const uint64_t seed = 1;
+    const double eps = 1e-7;
+
+    std::cout << "N=" << n
+              << " seeds in unit box, seed=" << seed
+              << ", check volume_sum≈1.0, vertex indices, and global bbox within [0,1]^3 plus eps=" << eps;
+    std::cout.flush();
+
+    auto seeds = voronoi::generate_random_points_box(n, seed, 1.0);
     voronoi::VoronoiStats stats;
 
     double volume_sum = 0.0;
@@ -136,7 +148,6 @@ static void test_polyhedra_basic_invariants_and_bbox() {
     assert(poly_count == n);
     assert(approx(volume_sum, 1.0, 1e-6));
 
-    const double eps = 1e-7;
     assert(global_min >= -eps);
     assert(global_max <= 1.0 + eps);
 
@@ -144,13 +155,19 @@ static void test_polyhedra_basic_invariants_and_bbox() {
     assert(stats.time_ms_qh_total_internal >= 0.0);
     assert(stats.time_ms_qh_mesh_convert >= 0.0);
     assert(stats.time_ms_quickhull + 1e-9 >= stats.time_ms_qh_total_internal);
-    std::cout << " OK\n\n";
 }
 
 static void test_polyhedra_surface_area_consistency() {
     const size_t n = 2048;
-    std::cout << "Test polyhedra_surface_area_consistency: N=2048 seeds in unit box, seed=5, compare compute_polyhedron_face_areas sum with independent triangulated surface area from poly_surface_area using relative tol=1e-9 ...";
-    auto seeds = voronoi::generate_random_points_box(n, 5, 1.0);
+    const uint64_t seed = 5;
+    const double tol_rel = 1e-9;
+
+    std::cout << "N=" << n
+              << " seeds in unit box, seed=" << seed
+              << ", compare compute_polyhedron_face_areas sum with independent triangulated surface area from poly_surface_area using relative tol=" << tol_rel;
+    std::cout.flush();
+
+    auto seeds = voronoi::generate_random_points_box(n, seed, 1.0);
     voronoi::VoronoiStats stats;
 
     size_t cell_count = 0;
@@ -171,19 +188,32 @@ static void test_polyhedra_surface_area_consistency() {
 
             const double triangulated_area = poly_surface_area(poly);
             const double scale = std::max(1.0, triangulated_area);
-            assert(approx(sum_areas, triangulated_area, 1e-9 * scale));
+            assert(approx(sum_areas, triangulated_area, tol_rel * scale));
 
             cell_count++;
         });
 
     assert(cell_count == n);
-    std::cout << " OK\n\n";
 }
 
 static void test_volume_and_centroid_translation_invariance() {
     const size_t n = 32;
-    std::cout << "Test volume_and_centroid_translation_invariance: N=32 seeds in unit box, seed=7, test volume and centroid invariance under translation delta=(0.1,-0.07,0.05) for first polyhedron ...";
-    auto seeds = voronoi::generate_random_points_box(n, 7, 1.0);
+    const uint64_t seed = 7;
+    const double dx = 0.1;
+    const double dy = -0.07;
+    const double dz = 0.05;
+    const double tol_vol = 1e-12;
+    const double tol_centroid = 1e-10;
+
+    std::cout << "N=" << n
+              << " seeds in unit box, seed=" << seed
+              << ", test volume and centroid invariance under translation delta=("
+              << dx << "," << dy << "," << dz
+              << "), volume tol=" << tol_vol
+              << ", centroid tol=" << tol_centroid;
+    std::cout.flush();
+
+    auto seeds = voronoi::generate_random_points_box(n, seed, 1.0);
     voronoi::VoronoiStats stats;
 
     bool tested = false;
@@ -201,7 +231,7 @@ static void test_volume_and_centroid_translation_invariance() {
             const auto c1 = voronoi::compute_polyhedron_centroid(poly);
 
             voronoi::Polyhedron shifted = poly;
-            const voronoi::Vec3 delta(0.1, -0.07, 0.05);
+            const voronoi::Vec3 delta(dx, dy, dz);
             for (auto& v : shifted.vertices) {
                 v = v + delta;
             }
@@ -209,23 +239,33 @@ static void test_volume_and_centroid_translation_invariance() {
             const double vol2 = voronoi::compute_polyhedron_volume(shifted);
             const auto c2 = voronoi::compute_polyhedron_centroid(shifted);
 
-            assert(approx(vol1, vol2, 1e-12));
-            assert(approx(c1.x + delta.x, c2.x, 1e-10));
-            assert(approx(c1.y + delta.y, c2.y, 1e-10));
-            assert(approx(c1.z + delta.z, c2.z, 1e-10));
+            assert(approx(vol1, vol2, tol_vol));
+            assert(approx(c1.x + delta.x, c2.x, tol_centroid));
+            assert(approx(c1.y + delta.y, c2.y, tol_centroid));
+            assert(approx(c1.z + delta.z, c2.z, tol_centroid));
 
             tested = true;
         });
 
     assert(tested);
-    std::cout << " OK\n\n";
 }
 
 static void test_two_seed_voronoi_split() {
-    std::cout << "Test two_seed_voronoi_split: N=2 seeds at x=0.25 and x=0.75 in unit box, expect plane x=0.5, each cell volume≈0.5 and centroids on opposite sides of x=0.5 ...";
+    const double left_x = 0.25;
+    const double right_x = 0.75;
+    const double split_x = 0.5;
+    const double tol_total = 1e-12;
+    const double tol_vol = 1e-9;
+
+    std::cout << "N=2 seeds at x=" << left_x << " and x=" << right_x
+              << " in unit box, expect split plane x=" << split_x
+              << ", each cell volume≈0.5 within tol=" << tol_vol
+              << " and total volume≈1.0 within tol=" << tol_total;
+    std::cout.flush();
+
     std::vector<voronoi::Vec3> seeds;
-    seeds.emplace_back(0.25, 0.5, 0.5);
-    seeds.emplace_back(0.75, 0.5, 0.5);
+    seeds.emplace_back(left_x, 0.5, 0.5);
+    seeds.emplace_back(right_x, 0.5, 0.5);
 
     voronoi::VoronoiStats stats;
 
@@ -250,22 +290,35 @@ static void test_two_seed_voronoi_split() {
     assert(present[0] && present[1]);
 
     const double total_vol = volumes[0] + volumes[1];
-    assert(approx(total_vol, 1.0, 1e-12));
-    assert(approx(volumes[0], 0.5, 1e-9));
-    assert(approx(volumes[1], 0.5, 1e-9));
-    assert(centroids[0].x < 0.5);
-    assert(centroids[1].x > 0.5);
-    std::cout << " OK\n\n";
+    assert(approx(total_vol, 1.0, tol_total));
+    assert(approx(volumes[0], 0.5, tol_vol));
+    assert(approx(volumes[1], 0.5, tol_vol));
+    assert(centroids[0].x < split_x);
+    assert(centroids[1].x > split_x);
 }
 
 static void test_clustered_seeds_positive_volume() {
-    std::cout << "Test clustered_seeds_positive_volume: N=5 nearly coincident seeds clustered around (0.5,0.5,0.5) with offsets up to 2e-6, require all cell volumes>1e-15 ...";
+    const size_t n = 5;
+    const double cx = 0.5;
+    const double cy = 0.5;
+    const double cz = 0.5;
+    const double offset1 = 1e-6;
+    const double offset2 = 2e-6;
+    const double min_vol = 1e-15;
+
+    std::cout << "N=" << n
+              << " nearly coincident seeds clustered around ("
+              << cx << "," << cy << "," << cz
+              << ") with offsets up to " << offset2
+              << ", require all cell volumes>" << min_vol;
+    std::cout.flush();
+
     std::vector<voronoi::Vec3> seeds;
-    seeds.emplace_back(0.5, 0.5, 0.5);
-    seeds.emplace_back(0.500001, 0.5, 0.5);
-    seeds.emplace_back(0.5, 0.500001, 0.5);
-    seeds.emplace_back(0.5, 0.5, 0.500001);
-    seeds.emplace_back(0.500002, 0.500002, 0.5);
+    seeds.emplace_back(cx, cy, cz);
+    seeds.emplace_back(cx + offset1, cy, cz);
+    seeds.emplace_back(cx, cy + offset1, cz);
+    seeds.emplace_back(cx, cy, cz + offset1);
+    seeds.emplace_back(cx + offset2, cy + offset2, cz);
 
     voronoi::VoronoiStats stats;
 
@@ -276,18 +329,34 @@ static void test_clustered_seeds_positive_volume() {
         stats,
         [&](size_t, const voronoi::Polyhedron& poly) {
             const double vol = voronoi::compute_polyhedron_volume(poly);
-            assert(vol > 1e-15);
+            assert(vol > min_vol);
             count++;
         });
 
     assert(count == seeds.size());
-    std::cout << " OK\n\n";
 }
 
 static void test_volume_summation_stability_and_statistics() {
     const size_t n = 8192;
-    std::cout << "Test volume_summation_stability_and_statistics: N=8192 seeds in unit box, seed=99, check volume_sum≈1.0 for two summation orders, and statistics on faces, edges, and diameter within bounds (faces∈[4,128], edges∈[6,256], diameter∈(0,4]) ...";
-    auto seeds = voronoi::generate_random_points_box(n, 99, 1.0);
+    const uint64_t seed = 99;
+    const double tol_sum = 1e-12;
+    const double tol_vol = 1e-6;
+    const int faces_min = 4;
+    const int faces_max = 128;
+    const int edges_min = 6;
+    const int edges_max = 256;
+    const double diameter_max = 4.0;
+
+    std::cout << "N=" << n
+              << " seeds in unit box, seed=" << seed
+              << ", check volume_sum≈1.0 within tol=" << tol_vol
+              << " for two summation orders (tolerance for sum difference=" << tol_sum
+              << ") and statistics on faces, edges, and diameter with faces∈["
+              << faces_min << "," << faces_max << "], edges∈["
+              << edges_min << "," << edges_max << "], diameter∈(0," << diameter_max << "]";
+    std::cout.flush();
+
+    auto seeds = voronoi::generate_random_points_box(n, seed, 1.0);
     voronoi::VoronoiStats stats;
 
     std::vector<double> volumes;
@@ -326,7 +395,7 @@ static void test_volume_summation_stability_and_statistics() {
 
             const double diameter = voronoi::compute_polyhedron_diameter(poly, seeds[seed_index]);
             assert(diameter > 0.0);
-            assert(diameter <= 4.0);
+            assert(diameter <= diameter_max);
             min_diameter = std::min(min_diameter, diameter);
             max_diameter = std::max(max_diameter, diameter);
         });
@@ -346,20 +415,75 @@ static void test_volume_summation_stability_and_statistics() {
         sum2 += v;
     }
 
-    assert(approx(sum1, sum2, 1e-12));
-    assert(approx(sum1, 1.0, 1e-6));
+    assert(approx(sum1, sum2, tol_sum));
+    assert(approx(sum1, 1.0, tol_vol));
 
-    assert(min_faces >= 4);
-    assert(max_faces <= 128);
-    assert(min_edges >= 6);
-    assert(max_edges <= 256);
+    assert(min_faces >= faces_min);
+    assert(max_faces <= faces_max);
+    assert(min_edges >= edges_min);
+    assert(max_edges <= edges_max);
     assert(min_diameter > 0.0);
-    assert(max_diameter <= 4.0);
-    std::cout << " OK\n\n";
+    assert(max_diameter <= diameter_max);
+}
+
+static void test_vertices_near_side_of_cutting_planes() {
+    const size_t n = 10000;
+    const uint64_t seed = 1234;
+    const double tol = 1e-15;
+
+    std::cout << "N=" << n
+              << " seeds in unit box, seed=" << seed
+              << ", for each generator i, every Voronoi cell vertex, and every other generator j, verify vertex lies on near side of perpendicular bisector cutting plane between seeds i and j within tol=" << tol;
+    std::cout.flush();
+
+    auto seeds = voronoi::generate_random_points_box(n, seed, 1.0);
+    voronoi::VoronoiStats stats;
+
+    voronoi::for_each_polyhedron(
+        seeds,
+        8,
+        stats,
+        [&](size_t i, const voronoi::Polyhedron& poly) {
+            const voronoi::Vec3 si = seeds[i];
+            const double six = si.x;
+            const double siy = si.y;
+            const double siz = si.z;
+            const double si2 = six * six + siy * siy + siz * siz;
+
+            for (const auto& v : poly.vertices) {
+                for (size_t j = 0; j < seeds.size(); ++j) {
+                    if (j == i) {
+                        continue;
+                    }
+                    const voronoi::Vec3 sj = seeds[j];
+                    const double sjx = sj.x;
+                    const double sjy = sj.y;
+                    const double sjz = sj.z;
+                    const double sj2 = sjx * sjx + sjy * sjy + sjz * sjz;
+
+                    const double nx = sjx - six;
+                    const double ny = sjy - siy;
+                    const double nz = sjz - siz;
+
+                    const double lhs = v.x * nx + v.y * ny + v.z * nz;
+                    const double rhs = 0.5 * (sj2 - si2);
+
+                    assert(lhs <= rhs + tol);
+                }
+            }
+        });
 }
 
 static void test_vtk_writer_smoke() {
-    std::cout << "Test vtk_writer_smoke: write two identical tetrahedral Polyhedron cells with ids 7 and 9 to test_polyhedra.vtk and verify presence of VTK POLYDATA headers and cell_id scalar field, then delete file ...";
+    const int num_cells = 2;
+    const int id0 = 7;
+    const int id1 = 9;
+
+    std::cout << "write " << num_cells
+              << " tetrahedral Polyhedron cells with ids " << id0 << " and " << id1
+              << " to test_polyhedra.vtk and verify presence of VTK POLYDATA headers and cell_id scalar field, then delete file";
+    std::cout.flush();
+
     voronoi::Polyhedron tetra;
     tetra.vertices = {
         {0.0, 0.0, 0.0},
@@ -376,7 +500,7 @@ static void test_vtk_writer_smoke() {
     };
 
     std::vector<voronoi::Polyhedron> polys = {tetra, tetra};
-    std::vector<int> ids = {7, 9};
+    std::vector<int> ids = {id0, id1};
 
     const std::string path = "test_polyhedra.vtk";
     voronoi::write_polyhedra_vtk(path, polys, ids);
@@ -391,17 +515,25 @@ static void test_vtk_writer_smoke() {
     assert(content.find("SCALARS cell_id int 1") != std::string::npos);
 
     std::remove(path.c_str());
+}
+
+static void run_test(int index, void (*test)()) {
+    std::cout << "Test #" << index << ": ";
+    std::cout.flush();
+    test();
     std::cout << " OK\n\n";
 }
 
 int main() {
-    test_polyhedra_topology_and_euler();
-    test_polyhedra_basic_invariants_and_bbox();
-    test_polyhedra_surface_area_consistency();
-    test_volume_and_centroid_translation_invariance();
-    test_two_seed_voronoi_split();
-    test_clustered_seeds_positive_volume();
-    test_volume_summation_stability_and_statistics();
-    test_vtk_writer_smoke();
+    int index = 1;
+    run_test(index++, test_polyhedra_topology_and_euler);
+    run_test(index++, test_polyhedra_basic_invariants_and_bbox);
+    run_test(index++, test_polyhedra_surface_area_consistency);
+    run_test(index++, test_volume_and_centroid_translation_invariance);
+    run_test(index++, test_two_seed_voronoi_split);
+    run_test(index++, test_clustered_seeds_positive_volume);
+    run_test(index++, test_volume_summation_stability_and_statistics);
+    run_test(index++, test_vertices_near_side_of_cutting_planes);
+    run_test(index++, test_vtk_writer_smoke);
     return 0;
 }
