@@ -27,32 +27,6 @@ static bool ends_with(const std::string& s, const std::string& suffix) {
     return std::equal(suffix.rbegin(), suffix.rend(), s.rbegin());
 }
 
-static bool run_voro_benchmark(const std::vector<Vec3>& seeds, FloatType& out_ms) {
-    int available = std::system("command -v voro++ > /dev/null 2>&1");
-    if (available != 0) return false;
-
-    std::string path = "voro_input.txt";
-    {
-        std::ofstream out(path);
-        out << std::setprecision(17);
-        for (size_t i = 0; i < seeds.size(); ++i) {
-            out << i << " " << seeds[i].x << " " << seeds[i].y << " " << seeds[i].z << "\n";
-        }
-    }
-
-    auto t0 = std::chrono::steady_clock::now();
-    std::string cmd = "voro++ -c \"%i %q %v %f %v\" 0 1 0 1 0 1 " + path + " > /dev/null 2>&1";
-    int code = std::system(cmd.c_str());
-    auto t1 = std::chrono::steady_clock::now();
-
-    std::remove(path.c_str());
-    std::remove((path + ".vol").c_str());
-
-    if (code != 0) return false;
-    out_ms = std::chrono::duration<FloatType, std::milli>(t1 - t0).count();
-    return true;
-}
-
 static void run_simulation(const SimulationConfig& config) {
     const FloatType sys_length = 1.0;
     std::vector<Vec3> seeds = voronoi::generate_random_points_box(static_cast<size_t>(config.n), config.seed_val, sys_length);
@@ -97,12 +71,6 @@ static void run_simulation(const SimulationConfig& config) {
         voronoi::write_polyhedra_vtk(config.out_path, polys_out, cell_ids);
     }
 
-    FloatType voro_ms = 0.0;
-    bool voro_ok = false;
-    if (config.voro_flag != 0) {
-        voro_ok = run_voro_benchmark(seeds, voro_ms);
-    }
-
     std::cout << std::setprecision(15);
     std::cout << "n=" << config.n << " seed=" << config.seed_val << " target_per_cell=" << config.target_per_cell << "\n";
     if (config.volume_flag) {
@@ -134,18 +102,10 @@ static void run_simulation(const SimulationConfig& config) {
     std::cout << "  qh_process=" << stats.time_ms_qh_process_internal << " ms\n";
     std::cout << "  qh_mesh_convert=" << stats.time_ms_qh_mesh_convert << " ms\n";
     std::cout << "  [Polyhedra Conversion]\n";
-    std::cout << "  total_time=" << stats.time_ms_polyhedra << " ms (" << (stats.time_ms_polyhedra / stats.time_ms_cells * 100.0) << "% of cells time)\n";
+    std::cout << "  conversion_time=" << stats.time_ms_polyhedra << " ms (" << (stats.time_ms_polyhedra / stats.time_ms_cells * 100.0) << "% of cells time)\n";
     if (config.volume_flag) {
         std::cout << "  [Volume]\n";
         std::cout << "  total_time=" << time_ms_volume << " ms\n";
-    }
-
-    if (config.voro_flag == 0) {
-        std::cout << "voro_ms=off\n";
-    } else if (voro_ok) {
-        std::cout << "voro_ms=" << voro_ms << "\n";
-    } else {
-        std::cout << "voro_ms=na\n";
     }
 }
 
@@ -153,17 +113,15 @@ int main(int argc, char** argv) {
     SimulationConfig config;
     config.n = 200;
     config.seed_val = 1;
-    config.target_per_cell = 4;
+    config.target_per_cell = 5;
     config.out_path = "polyhedra.vtk";
     config.volume_flag = 0;
-    config.voro_flag = 1;
 
     if (argc > 1) config.n = std::max(1, std::atoi(argv[1]));
     if (argc > 2) config.seed_val = static_cast<uint64_t>(std::strtoull(argv[2], nullptr, 10));
     if (argc > 3) config.target_per_cell = std::max(1, std::atoi(argv[3]));
     if (argc > 4) config.out_path = argv[4];
     if (argc > 5) config.volume_flag = std::atoi(argv[5]) != 0 ? 1 : 0;
-    if (argc > 6) config.voro_flag = std::atoi(argv[6]) != 0 ? 1 : 0;
 
     run_simulation(config);
     return 0;
