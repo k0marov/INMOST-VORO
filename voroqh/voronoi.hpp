@@ -49,6 +49,10 @@ struct TopologyOutput {
     int index;
     double volume;
     int num_faces;
+    double centroid_x;
+    double centroid_y;
+    double centroid_z;
+    double diameter;
     std::vector<double> face_areas;
     std::vector<int> face_edge_counts;
 };
@@ -64,6 +68,12 @@ void for_each_polyhedron(
 FloatType compute_polyhedron_volume(const Polyhedron& poly);
 
 void compute_polyhedron_face_areas(const Polyhedron& poly, std::vector<double>& out_areas);
+
+// Geometric centroid of a closed (possibly non-convex) polyhedron represented by Polyhedron
+Vec3 compute_polyhedron_centroid(const Polyhedron& poly);
+
+// Diameter: 2 * max distance from seed to any vertex (consistent with Voro++ max_radius)
+double compute_polyhedron_diameter(const Polyhedron& poly, const Vec3& seed);
 
 TopologyOutput write_voro_compatible_output(std::ostream& out, size_t seed_index, const Vec3& seed, const Polyhedron& poly, double vol, std::vector<double>& area_buffer);
 

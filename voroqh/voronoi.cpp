@@ -516,11 +516,87 @@ void compute_polyhedron_face_areas(const Polyhedron& poly, std::vector<double>& 
     }
 }
 
+Vec3 compute_polyhedron_centroid(const Polyhedron& poly) {
+    if (poly.vertices.size() < 4 || poly.face_degree.empty()) return Vec3(0, 0, 0);
+
+    Vec3 center(0, 0, 0);
+    for (const auto& v : poly.vertices) center = center + v;
+    center = center * (1.0 / static_cast<FloatType>(poly.vertices.size()));
+
+    long double accum_det = 0.0L;
+    long double mx = 0.0L, my = 0.0L, mz = 0.0L;
+    size_t offset = 0;
+    for (uint8_t deg_u8 : poly.face_degree) {
+        const int deg = static_cast<int>(deg_u8);
+        if (deg < 3) {
+            offset += static_cast<size_t>(deg);
+            continue;
+        }
+
+        Vec3 face_center(0, 0, 0);
+        for (int k = 0; k < deg; ++k) {
+            int idx = poly.face_indices[offset + static_cast<size_t>(k)];
+            face_center = face_center + poly.vertices[static_cast<size_t>(idx)];
+        }
+        face_center = face_center * (1.0 / static_cast<FloatType>(deg));
+
+        const int i0 = poly.face_indices[offset];
+        const int i1 = poly.face_indices[offset + 1];
+        const int i2 = poly.face_indices[offset + 2];
+        const Vec3 v0 = poly.vertices[static_cast<size_t>(i0)];
+        const Vec3 v1 = poly.vertices[static_cast<size_t>(i1)];
+        const Vec3 v2 = poly.vertices[static_cast<size_t>(i2)];
+        const Vec3 normal = cross_product(v1 - v0, v2 - v0);
+
+        const bool reverse = dot(normal, face_center - center) < 0.0;
+        for (int k = 1; k < deg - 1; ++k) {
+            const int ia = poly.face_indices[offset + static_cast<size_t>(k)];
+            const int ib = poly.face_indices[offset + static_cast<size_t>(k + 1)];
+            const Vec3 p0 = v0;
+            const Vec3 p1 = poly.vertices[static_cast<size_t>(reverse ? ib : ia)];
+            const Vec3 p2 = poly.vertices[static_cast<size_t>(reverse ? ia : ib)];
+            const long double det = static_cast<long double>(dot(p0, cross_product(p1, p2))); // 6 * signed tetra volume
+            accum_det += det;
+            const long double w = det / 24.0L; // (det/6) * (1/4)
+            mx += static_cast<long double>(p0.x + p1.x + p2.x) * w;
+            my += static_cast<long double>(p0.y + p1.y + p2.y) * w;
+            mz += static_cast<long double>(p0.z + p1.z + p2.z) * w;
+        }
+        offset += static_cast<size_t>(deg);
+    }
+    const long double denom = accum_det;
+    if (std::abs(denom) < 1e-30L) {
+        return center; // fallback
+    }
+    const long double inv = 1.0L / denom;
+    return Vec3(static_cast<FloatType>(mx * inv * 6.0L),
+                static_cast<FloatType>(my * inv * 6.0L),
+                static_cast<FloatType>(mz * inv * 6.0L));
+}
+
+double compute_polyhedron_diameter(const Polyhedron& poly, const Vec3& seed) {
+    if (poly.vertices.size() < 2) return 0.0;
+    double max_r2 = 0.0;
+    for (const auto& v : poly.vertices) {
+        Vec3 d = v - seed;
+        double r2 = static_cast<double>(norm2(d));
+        if (r2 > max_r2) max_r2 = r2;
+    }
+    return 2.0 * std::sqrt(max_r2);
+}
+
 TopologyOutput write_voro_compatible_output(std::ostream& out, size_t seed_index, const Vec3& seed, const Polyhedron& poly, double vol, std::vector<double>& area_buffer) {
     TopologyOutput topo;
     topo.index = static_cast<int>(seed_index);
     topo.volume = vol;
     topo.num_faces = static_cast<int>(poly.face_degree.size());
+    {
+        Vec3 c = compute_polyhedron_centroid(poly);
+        topo.centroid_x = c.x;
+        topo.centroid_y = c.y;
+        topo.centroid_z = c.z;
+    }
+    topo.diameter = compute_polyhedron_diameter(poly, seed);
 
     compute_polyhedron_face_areas(poly, area_buffer);
     topo.face_areas = area_buffer;
