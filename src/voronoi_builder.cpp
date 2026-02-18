@@ -7,7 +7,7 @@ VoronoiBuilder::VoronoiBuilder(const std::vector<std::tuple<double, double, doub
     : seeds(seeds), target_per_cell(target_per_cell) {
 }
 
-Mesh VoronoiBuilder::build() {
+Mesh VoronoiBuilder::build(voronoi::VoronoiStats* stats_out) {
     Mesh global_mesh;
     global_mesh.SetDimensions(3);
 
@@ -18,9 +18,8 @@ Mesh VoronoiBuilder::build() {
         voro_seeds.emplace_back(std::get<0>(s), std::get<1>(s), std::get<2>(s));
     }
 
-    voronoi::VoronoiStats stats;
-    
-    voronoi::for_each_polyhedron(voro_seeds, target_per_cell, stats, [&](size_t seed_index, const voronoi::Polyhedron& poly) {
+    voronoi::VoronoiStats stats_tmp;
+    voronoi::for_each_polyhedron(voro_seeds, target_per_cell, stats_tmp, [&](size_t seed_index, const voronoi::Polyhedron& poly) {
         if (poly.vertices.empty()) return;
 
         // Create INMOST nodes
@@ -53,6 +52,9 @@ Mesh VoronoiBuilder::build() {
             std::exit(1);
         }
     });
+    if (stats_out != nullptr) {
+        *stats_out = stats_tmp;
+    }
 
     return global_mesh;
 }

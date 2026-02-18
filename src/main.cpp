@@ -93,7 +93,7 @@ static void run_simulation(const SimulationConfig& config) {
         }
 
         VoronoiBuilder builder(inmost_seeds, config.target_per_cell);
-        Mesh mesh = builder.build();
+        Mesh mesh = builder.build(nullptr);
         
         auto t1_inmost = std::chrono::steady_clock::now();
         inmost_ms = std::chrono::duration<FloatType, std::milli>(t1_inmost - t0_inmost).count();
@@ -209,7 +209,10 @@ int main(int argc, char ** argv)
 
     const int target_per_cell = 5;
     VoronoiBuilder builder(seeds, target_per_cell);
-    Mesh voronoi_mesh = builder.build();
+    voronoi::VoronoiStats build_stats;
+    Mesh voronoi_mesh = builder.build(&build_stats);
+    std::cout << "Voronoi diagram generation via voroqh took " << build_stats.total_ms - build_stats.time_ms_callback << " ms" << std::endl;
+    std::cout << "INMOST::CreateCell() took " << build_stats.time_ms_callback << " ms" << std::endl;
 
     std::string output_filename = "voronoi_output.vtk";
     voronoi_mesh.Save(output_filename);

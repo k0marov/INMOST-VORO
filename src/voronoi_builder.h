@@ -4,6 +4,7 @@
 #include <vector>
 #include <tuple>
 #include "inmost.h"
+#include "voroqh/voronoi.hpp"
 
 using namespace INMOST;
 
@@ -13,7 +14,7 @@ class VoronoiBuilder {
 public:
     VoronoiBuilder(const std::vector<std::tuple<double, double, double>>& seeds, int target_per_cell = 5);
 
-    Mesh build();
+    Mesh build(voronoi::VoronoiStats* stats_out);
 
 private:
     void compute_voronoi_cell(int seed_index, Mesh& mesh);
