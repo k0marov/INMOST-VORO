@@ -1,6 +1,5 @@
 #include "inmost.h"
 #include "voronoi_builder.h"
-#include "helpers.h"
 #include "voronoi.hpp"
 #include <iostream>
 #include <vector>
@@ -28,39 +27,12 @@ struct SimulationConfig {
     int target_per_cell;
     std::string out_path;
     int volume_flag;
-    int voro_flag;
     int inmost_flag; // New flag for INMOST integration benchmark
 };
 
 static bool ends_with(const std::string& s, const std::string& suffix) {
     if (s.size() < suffix.size()) return false;
     return std::equal(suffix.rbegin(), suffix.rend(), s.rbegin());
-}
-
-static bool run_voro_benchmark(const std::vector<Vec3>& seeds, FloatType& out_ms) {
-    int available = std::system("command -v voro++ > /dev/null 2>&1");
-    if (available != 0) return false;
-
-    std::string path = "voro_input.txt";
-    {
-        std::ofstream out(path);
-        out << std::setprecision(17);
-        for (size_t i = 0; i < seeds.size(); ++i) {
-            out << i << " " << seeds[i].x << " " << seeds[i].y << " " << seeds[i].z << "\n";
-        }
-    }
-
-    auto t0 = std::chrono::steady_clock::now();
-    std::string cmd = "voro++ -c \"%i %q %v %f %v\" 0 1 0 1 0 1 " + path + " > /dev/null 2>&1";
-    int code = std::system(cmd.c_str());
-    auto t1 = std::chrono::steady_clock::now();
-
-    std::remove(path.c_str());
-    std::remove((path + ".vol").c_str());
-
-    if (code != 0) return false;
-    out_ms = std::chrono::duration<FloatType, std::milli>(t1 - t0).count();
-    return true;
 }
 
 static void run_simulation(const SimulationConfig& config) {
@@ -109,12 +81,6 @@ static void run_simulation(const SimulationConfig& config) {
         voronoi::write_polyhedra_vtk(config.out_path, polys_out, cell_ids);
     }
 
-    FloatType voro_ms = 0.0;
-    bool voro_ok = false;
-    if (config.voro_flag != 0) {
-        voro_ok = run_voro_benchmark(seeds, voro_ms);
-    }
-
     // Run INMOST integration benchmark if requested
     FloatType inmost_ms = 0.0;
     if (config.inmost_flag != 0) {
@@ -126,13 +92,7 @@ static void run_simulation(const SimulationConfig& config) {
             inmost_seeds.emplace_back(s.x, s.y, s.z);
         }
 
-        SystemSize system_size = {
-            std::make_pair(0.0, 1.0),
-            std::make_pair(0.0, 1.0),
-            std::make_pair(0.0, 1.0)
-        };
-
-        VoronoiBuilder builder(inmost_seeds, system_size, config.target_per_cell);
+        VoronoiBuilder builder(inmost_seeds, config.target_per_cell);
         Mesh mesh = builder.build();
         
         auto t1_inmost = std::chrono::steady_clock::now();
@@ -182,16 +142,8 @@ static void run_simulation(const SimulationConfig& config) {
         std::cout << "  total_time=" << time_ms_volume << " ms\n";
     }
 
-    if (config.voro_flag == 0) {
-        std::cout << "voro_ms=off\n";
-    } else if (voro_ok) {
-        std::cout << "voro_ms=" << voro_ms << "\n";
-    } else {
-        std::cout << "voro_ms=na\n";
-    }
-
     if (config.inmost_flag != 0) {
-        std::cout << "inmost_ms=" << inmost_ms << " (voroqh + INMOST conversion + clipping)\n";
+        std::cout << "inmost_ms=" << inmost_ms << " (voroqh + INMOST conversion)\n";
         std::cout << "Overhead factor=" << (inmost_ms / stats.total_ms) << "x\n";
     }
 }
@@ -217,7 +169,6 @@ int main(int argc, char ** argv)
         config.target_per_cell = 4;
         config.out_path = "polyhedra.vtk";
         config.volume_flag = 0;
-        config.voro_flag = 0; // Default off for now unless requested
         config.inmost_flag = 1; // Default ON for integrated benchmark
 
         if (argc > 1) config.n = std::max(1, std::atoi(argv[1]));
@@ -225,16 +176,14 @@ int main(int argc, char ** argv)
         if (argc > 3) config.target_per_cell = std::max(1, std::atoi(argv[3]));
         if (argc > 4) config.out_path = argv[4];
         if (argc > 5) config.volume_flag = std::atoi(argv[5]) != 0 ? 1 : 0;
-        if (argc > 6) config.voro_flag = std::atoi(argv[6]) != 0 ? 1 : 0;
-        // Optional 7th arg for inmost flag
-        if (argc > 7) config.inmost_flag = std::atoi(argv[7]) != 0 ? 1 : 0;
+        if (argc > 6) config.inmost_flag = std::atoi(argv[7]) != 0 ? 1 : 0;
 
         run_simulation(config);
         return 0;
     }
 
     if (argc < 2) {
-        std::cout << "Usage: " << argv[0] << " <path_to_xyz_file> OR " << argv[0] << " <n> <seed> <target> <out> <vol> <voro> <inmost>" << std::endl;
+        std::cout << "Usage: " << argv[0] << " <path_to_xyz_file> OR " << argv[0] << " <n> <seed> <target> <out> <vol> <inmost>" << std::endl;
         return 1;
     }
 
@@ -258,15 +207,9 @@ int main(int argc, char ** argv)
     
     std::cout << "Read " << seeds.size() << " seeds from " << filepath << std::endl;
 
-    // Define a 1x1x1 system size
-    SystemSize system_size = {
-        std::make_pair(0.0, 1.0),
-        std::make_pair(0.0, 1.0),
-        std::make_pair(0.0, 1.0)
-    };
-
+    const int target_per_cell = 5;
     // Build the Voronoi tessellation
-    VoronoiBuilder builder(seeds, system_size);
+    VoronoiBuilder builder(seeds, target_per_cell);
     Mesh voronoi_mesh = builder.build();
 
     // Save the result to a VTK file

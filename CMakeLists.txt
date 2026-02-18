@@ -20,7 +20,6 @@ option(BUILD_BENCHMARK "Build the Benchmark executable (requires voro++)" ON)
 
 add_library(VoroLib
 		voronoi_builder.cpp
-		helpers.cpp
 		voroqh/voronoi.cpp
 )
 

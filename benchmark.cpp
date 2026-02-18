@@ -211,7 +211,7 @@ int main(int argc, char** argv) {
     const int target_per_cell = 5;
 
     for (int n : N_values) {
-        std::cout << "Running N=" << n << "... " << std::flush;
+        std::cout << "Running N=" << n << "...\n" << std::flush;
 
         const double sys_length = 1.0;
         uint64_t seed_val = 1234;
@@ -247,8 +247,8 @@ int main(int argc, char** argv) {
             return 1;
         }
 
-        csv << n << "," << voro_time_s << "," << voroqh_time_s << "," << voroqh_time_per_cell_us << "," << inmost_time_s << "\n";
-        std::cout << "Done. voro++: " << voro_time_s << "s, voroqh: " << voroqh_time_s << "s\n";
+        csv << n << "," << voro_time_s << "," << voroqh_time_s << "," << voroqh_time_per_cell_us << "," << inmost_time_s << "\n" << std::flush;
+        std::cout << "Done. voro++: " << voro_time_s << "s, voroqh: " << voroqh_time_s << "s\n\n";
     }
     
     std::cout << "Benchmark complete.\n";
