@@ -5,6 +5,7 @@
 #include <tuple>
 #include "inmost.h"
 #include "voroqh/voronoi.hpp"
+#include <chrono>
 
 using namespace INMOST;
 

@@ -392,6 +392,17 @@ std::vector<Vec3> generate_random_points_box(size_t n, uint64_t seed, FloatType 
     return pts;
 }
 
+std::vector<Polyhedron> generate_voronoi_diagram(
+    const std::vector<Vec3>& seeds,
+    int target_per_cell,
+    VoronoiStats& stats) {
+    
+    std::vector<Polyhedron> polys(seeds.size());
+    for_each_polyhedron(seeds, target_per_cell, stats, [&](size_t seed_index, const Polyhedron& poly) {
+        polys[seed_index] = poly;
+    });
+    return polys;
+}
 void for_each_polyhedron(
     const std::vector<Vec3>& seeds_in,
     int target_per_cell,

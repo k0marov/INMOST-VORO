@@ -19,8 +19,16 @@ Mesh VoronoiBuilder::build(voronoi::VoronoiStats* stats_out) {
     }
 
     voronoi::VoronoiStats stats_tmp;
-    voronoi::for_each_polyhedron(voro_seeds, target_per_cell, stats_tmp, [&](size_t seed_index, const voronoi::Polyhedron& poly) {
-        if (poly.vertices.empty()) return;
+
+    auto polys_out = voronoi::generate_voronoi_diagram(
+        voro_seeds,
+        target_per_cell,
+        stats_tmp
+    );
+
+    const auto t_inmost_start = std::chrono::steady_clock::now();
+    for (size_t i = 0; i < seeds.size(); ++i) {
+        auto poly = polys_out[i];
 
         // Create INMOST nodes
         ElementArray<Node> nodes(&global_mesh);
@@ -48,10 +56,13 @@ Mesh VoronoiBuilder::build(voronoi::VoronoiStats* stats_out) {
         Cell cell = global_mesh.CreateCell(faces).first;
 
         if (!cell.isValid()) {
-            std::cerr << "Warning: Cell for seed " << seed_index << " was invalid." << std::endl;
+            std::cerr << "Warning: Cell for seed " << i << " was invalid." << std::endl;
             std::exit(1);
         }
-    });
+
+    }
+    const auto t_inmost_end = std::chrono::steady_clock::now();
+    stats_tmp.time_ms_callback = std::chrono::duration<double, std::milli>(t_inmost_end - t_inmost_start).count();
     if (stats_out != nullptr) {
         *stats_out = stats_tmp;
     }

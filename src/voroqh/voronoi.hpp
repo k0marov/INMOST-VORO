@@ -60,6 +60,11 @@ struct TopologyOutput {
 
 std::vector<Vec3> generate_random_points_box(size_t n, uint64_t seed, FloatType box_len = 1.0);
 
+std::vector<Polyhedron> generate_voronoi_diagram(
+    const std::vector<Vec3>& seeds,
+    int target_per_cell,
+    VoronoiStats& stats);
+
 void for_each_polyhedron(
     const std::vector<Vec3>& seeds,
     int target_per_cell,
