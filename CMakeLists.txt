@@ -19,13 +19,13 @@ find_package(inmost REQUIRED)
 option(BUILD_BENCHMARK "Build the Benchmark executable (requires voro++)" ON)
 
 add_library(VoroLib
-		voronoi_builder.cpp
-		voroqh/voronoi.cpp
+		src/voronoi_builder.cpp
+		src/voroqh/voronoi.cpp
 )
 
 target_include_directories(VoroLib
 		PUBLIC ${INMOST_INCLUDE_DIRS}
-		PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/voroqh
+		PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/voroqh
 )
 
 target_link_libraries(VoroLib
@@ -36,10 +36,10 @@ target_compile_definitions(VoroLib
 		PUBLIC ${INMOST_DEFINITIONS}
 )
 
-set_property(TARGET VoroLib PROPERTY PUBLIC_HEADER voronoi_builder.h)
+set_property(TARGET VoroLib PROPERTY PUBLIC_HEADER src/voronoi_builder.h)
 
 
-add_executable(Voro main.cpp)
+add_executable(Voro src/main.cpp)
 target_include_directories(Voro PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/voroqh)
 target_link_libraries(Voro PRIVATE VoroLib)
 
@@ -53,7 +53,7 @@ if(BUILD_BENCHMARK)
     NAMES voro++
   )
   if(VORO_INCLUDE_DIR AND VORO_LIBRARY)
-    add_executable(Benchmark benchmark.cpp)
+    add_executable(Benchmark src/benchmark.cpp)
     target_include_directories(Benchmark PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/voroqh ${VORO_INCLUDE_DIR})
     target_link_libraries(Benchmark PRIVATE VoroLib ${VORO_LIBRARY})
   else()

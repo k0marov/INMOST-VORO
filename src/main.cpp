@@ -1,6 +1,6 @@
 #include "inmost.h"
 #include "voronoi_builder.h"
-#include "voronoi.hpp"
+#include "voroqh/voronoi.hpp"
 #include <iostream>
 #include <vector>
 #include <fstream>
@@ -176,7 +176,7 @@ int main(int argc, char ** argv)
         if (argc > 3) config.target_per_cell = std::max(1, std::atoi(argv[3]));
         if (argc > 4) config.out_path = argv[4];
         if (argc > 5) config.volume_flag = std::atoi(argv[5]) != 0 ? 1 : 0;
-        if (argc > 6) config.inmost_flag = std::atoi(argv[7]) != 0 ? 1 : 0;
+        if (argc > 6) config.inmost_flag = std::atoi(argv[6]) != 0 ? 1 : 0;
 
         run_simulation(config);
         return 0;
@@ -208,11 +208,9 @@ int main(int argc, char ** argv)
     std::cout << "Read " << seeds.size() << " seeds from " << filepath << std::endl;
 
     const int target_per_cell = 5;
-    // Build the Voronoi tessellation
     VoronoiBuilder builder(seeds, target_per_cell);
     Mesh voronoi_mesh = builder.build();
 
-    // Save the result to a VTK file
     std::string output_filename = "voronoi_output.vtk";
     voronoi_mesh.Save(output_filename);
     std::cout << "Saved Voronoi tessellation to " << output_filename << std::endl;
