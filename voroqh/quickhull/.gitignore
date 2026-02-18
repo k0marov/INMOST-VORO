@@ -1,3 +1,3 @@
 .DS_Store
-Tests/build
-Tests/.cache
+TestsSrc/build
+TestsSrc/.cache
