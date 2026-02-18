@@ -426,7 +426,10 @@ void for_each_polyhedron(
         stats.time_ms_polyhedra += std::chrono::duration<FloatType, std::milli>(t_poly_end - t_poly_start).count();
 
         const size_t original_index = static_cast<size_t>(grid.orig_index[static_cast<size_t>(i)]);
+        const auto t_cb_start = Clock::now();
         on_polyhedron(original_index, poly_tmp);
+        const auto t_cb_end = Clock::now();
+        stats.time_ms_callback += std::chrono::duration<FloatType, std::milli>(t_cb_end - t_cb_start).count();
     }
 
     const auto t_total_end = Clock::now();

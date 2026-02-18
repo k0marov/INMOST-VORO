@@ -43,6 +43,7 @@ struct VoronoiStats {
     FloatType time_ms_qh_mesh_convert = 0.0;
 
     FloatType time_ms_polyhedra = 0.0;
+    FloatType time_ms_callback = 0.0;
 };
 
 struct TopologyOutput {

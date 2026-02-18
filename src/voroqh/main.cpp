@@ -103,6 +103,7 @@ static void run_simulation(const SimulationConfig& config) {
     std::cout << "  qh_mesh_convert=" << stats.time_ms_qh_mesh_convert << " ms\n";
     std::cout << "  [Polyhedra Conversion]\n";
     std::cout << "  conversion_time=" << stats.time_ms_polyhedra << " ms (" << (stats.time_ms_polyhedra / stats.time_ms_cells * 100.0) << "% of cells time)\n";
+    std::cout << "  callback_time=" << stats.time_ms_callback << " ms (" << (stats.time_ms_callback / stats.total_ms * 100.0) << "% of total time)\n";
     if (config.volume_flag) {
         std::cout << "  [Volume]\n";
         std::cout << "  total_time=" << time_ms_volume << " ms\n";
