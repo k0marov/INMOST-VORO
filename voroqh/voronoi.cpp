@@ -398,7 +398,6 @@ void for_each_polyhedron(
     VoronoiStats& stats,
     const std::function<void(size_t seed_index, const Polyhedron& poly)>& on_polyhedron) {
     const auto t_total_start = Clock::now();
-    std::cout << "Running for_each_polyhedron with " << seeds_in.size() << " seeds and target_per_cell = " << target_per_cell << "\n";
 
     std::vector<Vec3> seeds;
     const auto t_build_start = Clock::now();
