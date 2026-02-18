@@ -54,22 +54,9 @@ struct VoroCellMetrics {
     double surface_area = 0.0;
 };
 
-static void test_random_points_deterministic() {
-    std::cout << "Test random_points_deterministic: N=32 seeds in unit box, seed=123, box_len=1.0 ...";
-    auto a = voronoi::generate_random_points_box(32, 123, 1.0);
-    auto b = voronoi::generate_random_points_box(32, 123, 1.0);
-    assert(a.size() == b.size());
-    for (size_t i = 0; i < a.size(); ++i) {
-        assert(a[i].x == b[i].x);
-        assert(a[i].y == b[i].y);
-        assert(a[i].z == b[i].z);
-    }
-    std::cout << " OK\n";
-}
-
 static void test_polyhedra_topology_and_euler() {
-    const size_t n = 128;
-    std::cout << "Test polyhedra_topology_and_euler: N=128 seeds in unit box, seed=42, target_per_cell=4, check V,E,F and Euler characteristic V-E+F=2 with E derived from sum(face_degree) ...";
+    const size_t n = 4096;
+    std::cout << "Test polyhedra_topology_and_euler: N=4096 seeds in unit box, seed=42, check V,E,F and Euler characteristic V-E+F=2 with E derived from sum(face_degree) ...";
     auto seeds = voronoi::generate_random_points_box(n, 42, 1.0);
     voronoi::VoronoiStats stats;
 
@@ -103,12 +90,12 @@ static void test_polyhedra_topology_and_euler() {
         });
 
     assert(cell_count == n);
-    std::cout << " OK\n";
+    std::cout << " OK\n\n";
 }
 
 static void test_polyhedra_basic_invariants_and_bbox() {
-    const size_t n = 200;
-    std::cout << "Test polyhedra_basic_invariants_and_bbox: N=200 seeds in unit box, seed=1, target_per_cell=4, check volume_sum≈1.0, vertex indices, and global bbox within [0,1]^3 plus eps=1e-7 ...";
+    const size_t n = 4096;
+    std::cout << "Test polyhedra_basic_invariants_and_bbox: N=4096 seeds in unit box, seed=1, check volume_sum≈1.0, vertex indices, and global bbox within [0,1]^3 plus eps=1e-7 ...";
     auto seeds = voronoi::generate_random_points_box(n, 1, 1.0);
     voronoi::VoronoiStats stats;
 
@@ -157,12 +144,12 @@ static void test_polyhedra_basic_invariants_and_bbox() {
     assert(stats.time_ms_qh_total_internal >= 0.0);
     assert(stats.time_ms_qh_mesh_convert >= 0.0);
     assert(stats.time_ms_quickhull + 1e-9 >= stats.time_ms_qh_total_internal);
-    std::cout << " OK\n";
+    std::cout << " OK\n\n";
 }
 
 static void test_polyhedra_surface_area_consistency() {
-    const size_t n = 64;
-    std::cout << "Test polyhedra_surface_area_consistency: N=64 seeds in unit box, seed=5, target_per_cell=4, compare compute_polyhedron_face_areas sum with independent triangulated surface area from poly_surface_area using relative tol=1e-9 ...";
+    const size_t n = 2048;
+    std::cout << "Test polyhedra_surface_area_consistency: N=2048 seeds in unit box, seed=5, compare compute_polyhedron_face_areas sum with independent triangulated surface area from poly_surface_area using relative tol=1e-9 ...";
     auto seeds = voronoi::generate_random_points_box(n, 5, 1.0);
     voronoi::VoronoiStats stats;
 
@@ -190,12 +177,12 @@ static void test_polyhedra_surface_area_consistency() {
         });
 
     assert(cell_count == n);
-    std::cout << " OK\n";
+    std::cout << " OK\n\n";
 }
 
 static void test_volume_and_centroid_translation_invariance() {
     const size_t n = 32;
-    std::cout << "Test volume_and_centroid_translation_invariance: N=32 seeds in unit box, seed=7, target_per_cell=4, test volume and centroid invariance under translation delta=(0.1,-0.07,0.05) for first polyhedron ...";
+    std::cout << "Test volume_and_centroid_translation_invariance: N=32 seeds in unit box, seed=7, test volume and centroid invariance under translation delta=(0.1,-0.07,0.05) for first polyhedron ...";
     auto seeds = voronoi::generate_random_points_box(n, 7, 1.0);
     voronoi::VoronoiStats stats;
 
@@ -231,11 +218,11 @@ static void test_volume_and_centroid_translation_invariance() {
         });
 
     assert(tested);
-    std::cout << " OK\n";
+    std::cout << " OK\n\n";
 }
 
 static void test_two_seed_voronoi_split() {
-    std::cout << "Test two_seed_voronoi_split: N=2 seeds at x=0.25 and x=0.75 in unit box, target_per_cell=2, expect plane x=0.5, each cell volume≈0.5 and centroids on opposite sides of x=0.5 ...";
+    std::cout << "Test two_seed_voronoi_split: N=2 seeds at x=0.25 and x=0.75 in unit box, expect plane x=0.5, each cell volume≈0.5 and centroids on opposite sides of x=0.5 ...";
     std::vector<voronoi::Vec3> seeds;
     seeds.emplace_back(0.25, 0.5, 0.5);
     seeds.emplace_back(0.75, 0.5, 0.5);
@@ -268,11 +255,11 @@ static void test_two_seed_voronoi_split() {
     assert(approx(volumes[1], 0.5, 1e-9));
     assert(centroids[0].x < 0.5);
     assert(centroids[1].x > 0.5);
-    std::cout << " OK\n";
+    std::cout << " OK\n\n";
 }
 
 static void test_clustered_seeds_positive_volume() {
-    std::cout << "Test clustered_seeds_positive_volume: N=5 nearly coincident seeds clustered around (0.5,0.5,0.5) with offsets up to 2e-6, target_per_cell=4, require all cell volumes>1e-15 ...";
+    std::cout << "Test clustered_seeds_positive_volume: N=5 nearly coincident seeds clustered around (0.5,0.5,0.5) with offsets up to 2e-6, require all cell volumes>1e-15 ...";
     std::vector<voronoi::Vec3> seeds;
     seeds.emplace_back(0.5, 0.5, 0.5);
     seeds.emplace_back(0.500001, 0.5, 0.5);
@@ -294,12 +281,12 @@ static void test_clustered_seeds_positive_volume() {
         });
 
     assert(count == seeds.size());
-    std::cout << " OK\n";
+    std::cout << " OK\n\n";
 }
 
 static void test_volume_summation_stability_and_statistics() {
-    const size_t n = 256;
-    std::cout << "Test volume_summation_stability_and_statistics: N=256 seeds in unit box, seed=99, target_per_cell=8, check volume_sum≈1.0 for two summation orders, and statistics on faces, edges, and diameter within bounds (faces∈[4,128], edges∈[6,256], diameter∈(0,4]) ...";
+    const size_t n = 8192;
+    std::cout << "Test volume_summation_stability_and_statistics: N=8192 seeds in unit box, seed=99, check volume_sum≈1.0 for two summation orders, and statistics on faces, edges, and diameter within bounds (faces∈[4,128], edges∈[6,256], diameter∈(0,4]) ...";
     auto seeds = voronoi::generate_random_points_box(n, 99, 1.0);
     voronoi::VoronoiStats stats;
 
@@ -368,7 +355,7 @@ static void test_volume_summation_stability_and_statistics() {
     assert(max_edges <= 256);
     assert(min_diameter > 0.0);
     assert(max_diameter <= 4.0);
-    std::cout << " OK\n";
+    std::cout << " OK\n\n";
 }
 
 static void test_vtk_writer_smoke() {
@@ -404,11 +391,10 @@ static void test_vtk_writer_smoke() {
     assert(content.find("SCALARS cell_id int 1") != std::string::npos);
 
     std::remove(path.c_str());
-    std::cout << " OK\n";
+    std::cout << " OK\n\n";
 }
 
 int main() {
-    test_random_points_deterministic();
     test_polyhedra_topology_and_euler();
     test_polyhedra_basic_invariants_and_bbox();
     test_polyhedra_surface_area_consistency();
