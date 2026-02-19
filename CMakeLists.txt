@@ -16,7 +16,7 @@ endif()
 
 find_package(inmost REQUIRED)
 
-option(BUILD_BENCHMARK "Build the Benchmark executable (requires voro++)" ON)
+option(BUILD_BENCHMARK "Build the Benchmark executable (requires voro++)" OFF)
 
 add_library(VoroLib
 		src/voronoi_builder.cpp

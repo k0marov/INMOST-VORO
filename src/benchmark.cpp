@@ -1,4 +1,3 @@
-#include "inmost.h"
 #include "voronoi_builder.h"
 #include "voroqh/voronoi.hpp"
 #include <iostream>
@@ -15,7 +14,6 @@
 #include <sstream>
 #include <voro++.hh>
 
-using namespace INMOST;
 using FloatType = voronoi::FloatType;
 using Vec3 = voronoi::Vec3;
 
@@ -195,7 +193,7 @@ int main(int argc, char** argv) {
     if (argc > 1) out_csv = argv[1];
 
     std::ofstream csv(out_csv);
-    csv << "N,voro++_time_s,voroqh_time_s,voroqh_time_per_cell_us,inmost_cell_creation_time_s\n";
+    csv << "N,voro++_time_s,voroqh_time_s,voroqh_time_per_cell_us\n";
     
     std::cout << "Starting Benchmark Suite...\n";
     std::cout << "Results will be written to: " << out_csv << "\n";
@@ -237,7 +235,6 @@ int main(int argc, char** argv) {
         double voroqh_time_s = voroqh_total_time_s - voroqh_topology_time_s;
         double voroqh_time_per_cell_us = (voroqh_time_s / n) * 1e6;
 
-        double inmost_time_s = 0.0;
 
         double voro_time_s = 0.0;
         auto voro_topos = run_voro_library(seeds, voro_time_s);
@@ -247,7 +244,7 @@ int main(int argc, char** argv) {
             return 1;
         }
 
-        csv << n << "," << voro_time_s << "," << voroqh_time_s << "," << voroqh_time_per_cell_us << "," << inmost_time_s << "\n" << std::flush;
+        csv << n << "," << voro_time_s << "," << voroqh_time_s << "," << voroqh_time_per_cell_us <<  "\n" << std::flush;
         std::cout << "Done. voro++: " << voro_time_s << "s, voroqh: " << voroqh_time_s << "s\n\n";
     }
     
