@@ -1,16 +1,10 @@
 # **INMOST-VORO**
 
-> [!WARNING]
-> THIS IS WORK IN PROGRESS
-
-
 ![visualization.png](docs/imgs/visualization.png)
-
-**A PDF overview of the project can be found [here](https://skomarov.com/static/distributed_voronoi_remeshing.pdf).**
-
 
 * **VoroLib** — a library with Voronoi-related utilities
 * **Voro** — a command-line executable using the library
+* **Benchmark** — a benchmark suite to measure performance and compare to voro++, veryfing the generated Voronoi diagrams match.  
 
 ---
 
@@ -32,8 +26,8 @@ Compile INMOST by using the guide from here: [https://github.com/INMOST-DEV/INMO
 ### **1. Clone the project**
 
 ```bash
-git clone https://github.com/yourusername/InmostVoro.git
-cd InmostVoro
+git clone https://github.com/k0marov/INMOST-VORO.git
+cd INMOST-VORO
 ```
 
 ### **2. Configure with CMake**
@@ -62,38 +56,22 @@ This produces:
 
 ---
 
-## **Installation (Optional)**
-
-To install the executable, library, and headers:
-
-```bash
-cmake --install build --prefix /your/install/prefix
-```
-
-Default install locations:
-
-```
-bin/          → Voro executable
-lib/          → VoroLib library
-include/      → public headers (voronoi_builder.h)
-lib/cmake/InmostVoro/ → CMake package config (exported targets)
-```
-
----
-
 ## **Example usage**
 
 1. Use a helper script to generate a cloud of random seed points in with coords between 0 and 1:
 ```bash
-python scripts/generate_random_points.py 1000 random_points_1000.txt
+python3 scripts/generate_random_points.py --num-points 1000 -o points_1000.txt
 ```
 2. Run Voro to get a Voronoi tessellation with these points 
 ```bash
-./Voro random_points_1000.txt
+./build/Voro points_1000.txt
 ```
-3.93. Open output file `voronoi_output.vtk` in ParaView to view the tessellation and use it
+Run with `--direct-vtk` file to skip using INMOST and write to VTK directly
+```bash
+./build/Voro points_1000.txt --direct-vtk
+```
 
----
+Open output file `voronoi_output.vtk` in ParaView to view the tessellation.
 
 ## **Benchmarks**
 
@@ -110,18 +88,18 @@ After building, run:
 ```
 
 This will:
-- Iterate through various input sizes (N=100 to N=2,000,000).
+- Iterate through various input sizes (N=100 to N=3,000,000).
 - Measure execution times for each component.
 - Output results to `benchmark_results.csv`.
 
-**Note**: The benchmark simulates real-world conditions by including file I/O overhead for all methods to ensure a fair comparison.
+## voroqh
 
----
+In `src/voroqh` directory there is the implemented algorithm for computing Voronoi diagram, including a modified QuickHull algorithm. More about it in [./src/voroqh/README.md](./src/voroqh/README.md).
 
-## **Migration to Voroqh**
+## **Tests** 
 
-The project has been migrated from the original geometrical engine to **voroqh**. Key changes include:
-*   **Engine Replacement**: Replaced the legacy Voronoi engine with `voroqh` for efficient parallel generation.
-*   **Optimization**: Compiled with `-O3 -march=native` for maximum performance.
-*   **Simplified Pipeline**: Removed `PlanarCutter`. Boundary clipping is now handled natively by `voroqh`, significantly reducing overhead (~2x faster conversion).
-*   **INMOST Conversion**: Implemented direct conversion from `voroqh::Polyhedron` to `INMOST::Cell`.
+benchmark.cpp includes tests along with the benchmark that run automatically with the benchmark.
+voroqh has a full suite of tests for the algorithm. 
+modified QuickHull algorithm is also tested in `quickhull/` directory. 
+For info on running the voroqh tests, see [./src/voroqh/README.md](./src/voroqh/README.md).
+

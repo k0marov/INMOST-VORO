@@ -1,6 +1,6 @@
 # voroqh
 
-voroqh is a small parallelizable 3D Voronoi diagram generator designed as an alternative to voro++. It builds Voronoi cells in a unit box using a custom pipeline based on a modified QuickHull implementation for convex hulls.
+voroqh is a small parallelizable 3D Voronoi diagram generator designed as an alternative to voro++ for INMOST-VORO project. It builds Voronoi cells in a unit box using a custom pipeline based on a modified QuickHull implementation for convex hulls.
 
 The focus is on:
 - Being O(N) for uniform seed distributions 

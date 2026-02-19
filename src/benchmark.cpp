@@ -206,7 +206,7 @@ int main(int argc, char** argv) {
     N_values.push_back(1000);
     for (int n = 10000; n <= 100000; n += 10000) N_values.push_back(n);
     for (int n = 200000; n <= 1000000; n += 100000) N_values.push_back(n);
-    for (int n = 1000000; n <= 10000000; n += 1000000) N_values.push_back(n);
+    for (int n = 1000000; n <= 3000000; n += 1000000) N_values.push_back(n);
 
     const int target_per_cell = 5;
 
