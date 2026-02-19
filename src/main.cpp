@@ -99,7 +99,6 @@ int main(int argc, char ** argv)
         return 1;
     }
 
-    // voroqh_pipeline(infile, output_filename);
     if (direct_vtk) {
         direct_vtk_pipeline(infile, output_filename);
     } else {

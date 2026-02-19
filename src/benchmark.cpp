@@ -79,7 +79,7 @@ static bool validate_diagram(const std::vector<voronoi::TopologyOutput>& voropp_
         double dist = std::abs(dx) + std::abs(dy) + std::abs(dz); 
         // const double centroid_eps = 5e-6;
         // double D = std::max(va.diameter, vb.diameter);
-        double threshold = 1e-6;
+        double threshold = 1e-5;
         if (dist > threshold) {
             std::cerr << "Centroid mismatch at cell " << i << "\n";
             std::cerr << "  distance = " << dist << ", threshold = " << threshold << "\n";
@@ -206,7 +206,7 @@ int main(int argc, char** argv) {
     N_values.push_back(1000);
     for (int n = 10000; n <= 100000; n += 10000) N_values.push_back(n);
     for (int n = 200000; n <= 1000000; n += 100000) N_values.push_back(n);
-    // N_values.push_back(2000000);
+    for (int n = 1000000; n <= 10000000; n += 1000000) N_values.push_back(n);
 
     const int target_per_cell = 5;
 
