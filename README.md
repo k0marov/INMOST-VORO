@@ -108,3 +108,4 @@ More about it in [./src/voroqh/README.md](./src/voroqh/README.md).
 - The modified QuickHull algorithm is also tested in `quickhull/` directory. 
 For info on running the voroqh tests, see [./src/voroqh/README.md](./src/voroqh/README.md).
 
+The tests are also run on Github Actions for each pull request or push to `main` branch.
