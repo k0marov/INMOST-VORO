@@ -14,10 +14,14 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: build QuickHull tests
-      run: cd src/voroqh/quickhull/Tests && cmake -S . -B build && cmake --build build
+      working-directory: src/voroqh/quickhull/Tests
+      run: cmake -S . -B build && cmake --build build
     - name: run QuickHull tests 
+      working-directory: src/voroqh/quickhull/Tests
       run: ./build/QuickHullTests
     - name: build voroqh tests
-      run:  cd ../../ && g++ -std=c++17 -O2 tests.cpp voronoi.cpp -o voroqh_tests
+      working-directory: src/voroqh
+      run: g++ -std=c++17 -O3 tests.cpp voronoi.cpp -o voroqh_tests
     - name: run voroqh tests
-      run:  ./voroqh_tests
+      working-directory: src/voroqh
+      run: ./voroqh_tests

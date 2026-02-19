@@ -74,7 +74,7 @@ From the `voroqh` directory:
 ```bash
 cd /Users/roshi/Desktop/inmost-voronoi/code/INMOST-VORO/voroqh
 
-g++ -std=c++17 -O2 \
+g++ -std=c++17 -O3 \
     tests.cpp \
     voronoi.cpp \
     -o voroqh_tests
