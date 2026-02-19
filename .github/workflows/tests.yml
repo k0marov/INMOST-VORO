@@ -1,0 +1,23 @@
+name: Tests for voroqh and quickhull
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: build QuickHull tests
+      run: cd voroqh/quickhull/Tests && cmake -S . -B build && cmake --build build
+    - name: run QuickHull tests 
+      run: ./build/QuickHullTests
+    - name: build voroqh tests
+      run:  cd ../../ && g++ -std=c++17 -O2 tests.cpp voronoi.cpp -o voroqh_tests
+    - name: run voroqh tests
+      run:  ./voroqh_tests
