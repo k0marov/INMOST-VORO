@@ -98,12 +98,12 @@ All tests are assertion-based; if any assertion fails, the process terminates.
 
 ## Building and running QuickHull tests
 
-The embedded QuickHull implementation has its own test suite under `quickhull/Tests`, with a CMake configuration.
+The embedded QuickHull implementation has its own test suite under `quickhull/TestsSrc`, with a CMake configuration.
 
-From the `quickhull/Tests` directory:
+From the `quickhull/TestsSrc` directory:
 
 ```bash
-cd /Users/roshi/Desktop/inmost-voronoi/code/INMOST-VORO/voroqh/quickhull/Tests
+cd /Users/roshi/Desktop/inmost-voronoi/code/INMOST-VORO/voroqh/quickhull/TestsSrc
 
 cmake -S . -B build
 cmake --build build
