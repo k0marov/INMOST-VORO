@@ -14,7 +14,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: build QuickHull tests
-      run: cd voroqh/quickhull/Tests && cmake -S . -B build && cmake --build build
+      run: cd src/voroqh/quickhull/Tests && cmake -S . -B build && cmake --build build
     - name: run QuickHull tests 
       run: ./build/QuickHullTests
     - name: build voroqh tests
