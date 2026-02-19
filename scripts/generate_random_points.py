@@ -50,3 +50,4 @@ if __name__ == "__main__":
         sys.exit(1)
 
     generate_random_points(args.num_points, args.output)
+
